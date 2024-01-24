@@ -6,5 +6,5 @@ The official Taiga bot, from the [Taiga supremacists](https://discord.gg/9F5npU4
 
 ---
 
-TODO: Add startup instructions
+TODO: Add startup instructions<br>
 TODO: Add contribution guidelines
