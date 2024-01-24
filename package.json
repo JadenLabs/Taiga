@@ -1,0 +1,27 @@
+{
+  "name": "taiga",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "reg": "node ./src/bot/scripts/register",
+    "dev": "nodemon ./src/bot/index | pino-pretty",
+    "start": "node ./src/bot/index | pino-pretty",
+    "sync": "node ./src/database/scripts/syncDB",
+    "force": "node ./src/database/scripts/forceDB"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "sequelize": "^6.35.2",
+    "sharp": "^0.33.1",
+    "sqlite3": "^5.1.7",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
