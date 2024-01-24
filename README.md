@@ -1,5 +1,4 @@
-# Taiga Bot
-
+# Taiga Bot</br>
 By JadenLabs & Community
 ---
 
