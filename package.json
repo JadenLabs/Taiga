@@ -10,8 +10,8 @@
     "sync": "node ./src/database/scripts/syncDB",
     "force": "node ./src/database/scripts/forceDB"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "JadenLabs",
+  "license": "MIT",
   "dependencies": {
     "discord.js": "^14.14.1",
     "pino": "^8.17.2",
