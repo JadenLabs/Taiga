@@ -12,7 +12,6 @@ All types of contributions are encouraged and valued. See the [Table of Contents
 > -   Tweet about it
 > -   Join the [Taiga supremacists](https://discord.gg/9F5npU4Jya) Discord
 
-
 ## Table of Contents
 
 -   [Code of Conduct](#code-of-conduct)
@@ -87,11 +86,19 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/JadenL
 
 ## Styleguides
 
+We do not follow strict styling guides; however, we try to use conventional codeing principles and DRY approaches.
+
+Additionally, we use the Prettier formatter with the settings in `.prettierrc`.
+
 ### Commit Messages
 
-<!-- TODO
+Use descriptive commit messages that follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.<br>
+Here are some examples:
 
--->
+```
+feat: add new feature XYZ
+fix(scope): resolve issue with ABC
+```
 
 ## Attribution
 
