@@ -14,7 +14,7 @@ class Config {
             neutral: "#C4B7C8",
             success: "#68BB6C",
             error: "#EF5552",
-            invis: "35393e",
+            invis: "#2B2D31",
         };
 
         this.emojis = {
