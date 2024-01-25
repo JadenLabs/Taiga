@@ -39,5 +39,4 @@ def main(directory_path, output_directory):
             counter += 1
 
 
-# Replace 'output_directory' with the desired directory path for the cleaned images
 main("../taiga", "../taiga")
