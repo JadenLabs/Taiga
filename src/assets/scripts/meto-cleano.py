@@ -13,7 +13,8 @@ def clean_metadata(image_path, output_directory, counter):
             if tag in exif:
                 del exif[tag]
 
-        new_filename = f"taiga_{counter}.jpg"
+        # Add padding to the counter with zeros
+        new_filename = f"taiga_{str(counter).zfill(4)}.jpg"
         new_filepath = os.path.join(output_directory, new_filename)
 
         img.save(new_filepath, exif=img.info["exif"])
