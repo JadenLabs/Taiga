@@ -5,6 +5,6 @@ These are mainly for the project maintainers, but if you would like to work on a
 ## CMDs
 
 -   [ ] Add bot stats cmd
--   [ ] Show total cmds ran
--   [ ] Show bot uptime
--   [ ] Maybe show other system stats
+    -   [ ] Show total cmds ran
+    -   [ ] Show bot uptime
+    -   [ ] Maybe show other system stats
