@@ -31,6 +31,12 @@ class Config {
         this.ids = {
             roc: "1027380375028244551",
         };
+
+        this.fishingMessages = [
+            "How much grass have you touched this week?",
+            "You're petting Taiga daily, right??",
+            "Hail Taiga.",
+        ];
     }
 }
 
