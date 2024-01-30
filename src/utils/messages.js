@@ -25,7 +25,7 @@ We care about your privacy and want to be transparent about how the Taiga Discor
 - For inquiries about your rights, contact us at jadenlabs+taiga@proton.me.
 
 **5. Changes to the Privacy Policy:**
-- We reserve the right to update this policy. Changes will be notified in the bot's changelog [to be implemented] and the github repo.
+- We reserve the right to update this policy. Changes will be notified in the bot's changelog </phangelog:1201958592669044776> and the github repo.
 
 If you have any questions or concerns about our privacy policy, please reach out to us at jadenlabs+taiga@proton.me.
 
