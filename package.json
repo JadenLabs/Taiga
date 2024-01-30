@@ -13,6 +13,7 @@
   "author": "JadenLabs",
   "license": "MIT",
   "dependencies": {
+    "axios": "^1.6.7",
     "discord.js": "^14.14.1",
     "pino": "^8.17.2",
     "pino-pretty": "^10.3.1",
