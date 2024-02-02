@@ -1,4 +1,4 @@
-const User = require("../../models/user");
+const User = require("../database/models/user");
 
 async function getAverageBeans() {
     // Get data
@@ -16,6 +16,4 @@ async function getAverageBeans() {
     return average;
 }
 
-getAverageBeans().then((average) => {
-    console.log(`Average global bean count: ${Math.round(average)}`);
-});
+module.exports = { getAverageBeans };
