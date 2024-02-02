@@ -34,9 +34,9 @@ module.exports = {
                 name: `${index + 1}. #${commit.hash}`,
                 value: `${time(new Date(commit.date), "R")} by ${
                     commit.author
-                }\n**Message:**\n> ${commit.message}\n[View on GitHub](${
-                    commit.url
-                })`,
+                }\n**Message:**\n\`\`\`${
+                    commit.message
+                }\`\`\`\n[View on GitHub](${commit.url})`,
             }));
 
             const changelogEmbed = new EmbedBuilder()
