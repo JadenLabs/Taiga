@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, time } = require("discord.js");
 const config = require("../../config");
 const logger = require("../../../utils/logger");
 const { getGlobalPets, getGlobalBeans } = require("../../../utils/stats");
+const { getAverageBeans } = require("../../../utils/dataOperations");
 const Stat = require("../../../database/models/stats");
 const os = require("os");
 
@@ -26,6 +27,7 @@ module.exports = {
         // Economy stats
         const globalPets = await getGlobalPets();
         const globalBeans = await getGlobalBeans();
+        const averageBeans = Math.round(await getAverageBeans());
 
         // Bot information
         const uptime = process.uptime();
@@ -64,6 +66,7 @@ module.exports = {
                     value: `\
 - Global Pets: \`${globalPets}\`
 - Global Beans: \`${globalBeans}\`
+- Average Beans: \`${averageBeans}\`
 `,
                     inline: true,
                 },
