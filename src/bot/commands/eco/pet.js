@@ -31,7 +31,7 @@ module.exports = {
         const timeDif = Math.floor((dateNow - lastPet) / 1000);
 
         if (
-            // interaction.user.id !== config.ids.roc &&
+            interaction.user.id !== config.ids.roc &&
             timeDif < config.cooldowns.pet
         ) {
             // Timestamp
@@ -94,11 +94,23 @@ module.exports = {
             });
         });
 
-        const taigaImgPath = path.join(
+        let taigaImgPath = path.join(
             __dirname,
             "../../../assets/taiga",
             taigaImg
         );
+
+        // Chance for smokey to appear
+        const smokeyChance = 5000;
+        const smokeyRoll = Math.floor(Math.random() * (smokeyChance - 1) + 1);
+        if (smokeyRoll === smokeyChance) {
+            taigaImgPath = path.join(
+                __dirname,
+                "../../../assets/other_cats/smokey.jpg"
+            );
+            logger.info("Overwrite: a wild smokey appeared");
+            embed.setFooter({ text: "Wait.. that isn't Taiga " });
+        }
 
         // Log
         logger.info(`Selected taiga: ${taigaImg} - path ${taigaImgPath}`);
