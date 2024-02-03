@@ -31,7 +31,7 @@ module.exports = {
         const timeDif = Math.floor((dateNow - lastPet) / 1000);
 
         if (
-            interaction.user.id !== config.ids.roc &&
+            // interaction.user.id !== config.ids.roc && // ! Dont forget to comment this out
             timeDif < config.cooldowns.pet
         ) {
             // Timestamp
