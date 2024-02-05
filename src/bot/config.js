@@ -20,6 +20,7 @@ class Config {
         this.emojis = {
             loading: "<a:loading:1193049795082858597>",
             beans: "🫘",
+            fish: "🐟",
             heart: "<:lavenderheart:1190469444133208084>",
             BLF: "<:BLF:1203906821052563527>",
             BLE: "<:BLE:1203906819215466496>",

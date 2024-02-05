@@ -3,10 +3,10 @@ const config = require("../bot/config");
 const { sleep } = require("./time");
 const { getRandomValueFromArray } = require("./lists");
 
-const ANIMATION_STEPS = 10;
+const ANIMATION_STEPS = 5;
 
 async function fishingAnimation(interaction) {
-    const progressBarLength = 8;
+    const progressBarLength = 5;
     const progressBarChar = config.emojis.BMF;
     const emptyProgressBarChar = config.emojis.BME;
 
