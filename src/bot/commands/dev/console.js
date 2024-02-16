@@ -37,6 +37,7 @@ module.exports = {
     async execute(interaction) {
         // Get options
         const input = await interaction.options.getString("input");
+        logger.info(`Input -> ${input}`);
 
         // Misc
         if (interaction.user.id === "966201975798636624") {
