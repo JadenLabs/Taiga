@@ -31,7 +31,7 @@ module.exports = {
 
         // Bot information
         const uptime = process.uptime();
-        const formattedUptime = time(new Date(Date.now() - uptime), "R");
+        const formattedUptime = time(new Date(Date.now() - uptime * 1000), "R");
         const guilds = interaction.client.guilds.cache.size;
         const users = interaction.client.users.cache.size;
         const discordjsVersion = require("discord.js").version;
