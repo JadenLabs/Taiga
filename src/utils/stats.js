@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+const TAIGA_IMGS = path.join(__dirname, "../assets/taiga");
 const User = require("../database/models/user");
 
 async function getGlobalPets() {
@@ -30,4 +33,14 @@ async function getGlobalBeans() {
     }
 }
 
-module.exports = { getGlobalPets, getGlobalBeans };
+async function getTaigaPicCount() {
+    try {
+        const files = await fs.promises.readdir(TAIGA_IMGS);
+        return files.length;
+    } catch (err) {
+        console.error("Error reading directory:", err);
+        throw err;
+    }
+}
+
+module.exports = { getGlobalPets, getGlobalBeans, getTaigaPicCount };

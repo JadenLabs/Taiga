@@ -1,7 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder, time } = require("discord.js");
 const config = require("../../config");
 const logger = require("../../../utils/logger");
-const { getGlobalPets, getGlobalBeans } = require("../../../utils/stats");
+const {
+    getGlobalPets,
+    getGlobalBeans,
+    getTaigaPicCount,
+} = require("../../../utils/stats");
 const { getAverageBeans } = require("../../../utils/dataOperations");
 const Stat = require("../../../database/models/stats");
 const os = require("os");
@@ -28,6 +32,7 @@ module.exports = {
         const globalPets = await getGlobalPets();
         const globalBeans = await getGlobalBeans();
         const averageBeans = Math.round(await getAverageBeans());
+        const taigaPicCount = await getTaigaPicCount();
 
         // Bot information
         const uptime = process.uptime();
@@ -62,11 +67,12 @@ module.exports = {
                     inline: true,
                 },
                 {
-                    name: "Economy",
+                    name: "Misc",
                     value: `\
 - Global Pets: \`${globalPets}\`
 - Global Beans: \`${globalBeans}\`
 - Average Beans: \`${averageBeans}\`
+- Taiga Pictures: \`${taigaPicCount}\`
 `,
                     inline: true,
                 },
