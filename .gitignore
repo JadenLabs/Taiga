@@ -1,9 +1,11 @@
-# Npm
-node_modules
-package-lock.json
-
-# Other
-archive
-*_key.json
-*.log
+# Database
 *.sqlite
+
+# Python
+__pycache__
+
+# Secrets
+.env*
+
+# Logs
+logs/*

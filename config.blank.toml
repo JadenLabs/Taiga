@@ -1,0 +1,25 @@
+[bot]
+name = ""     # Your bot name
+status = ""   # The status of the bot; online, idle, etc...
+activity = "" # The activity message
+prefix = ""   # Not used but required by discord.py
+
+[ids]
+sudo_users = []
+home_guild = 0  # used for errors and emojis
+
+[colors]
+primary = 0xFFFFFF   # Used as the primary embed color
+secondary = 0x868686 # Used for embed separation
+invisible = 0x2B2D31 # Invisible embed color (dark mode only)
+success = 0x00D355   # Used on command success
+error = 0xDF0043     # Used on command errors
+
+[emojis]
+arrow_right = ""
+chat = ""
+dns = ""
+false = ""
+ping = ""
+trend_up = ""
+true = ""

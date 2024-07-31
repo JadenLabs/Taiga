@@ -1,0 +1,5 @@
+toml
+discord
+cogwatch
+colorlog
+python-dotenv
