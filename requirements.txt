@@ -2,4 +2,5 @@ toml
 discord
 cogwatch
 colorlog
+requests
 python-dotenv

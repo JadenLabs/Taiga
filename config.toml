@@ -4,6 +4,11 @@ status = "online"
 activity = "The cutest cat on Discord"
 prefix = "t."
 
+[github]
+owner = "JadenLabs"
+name = "Taiga"
+commits_per_page = 9
+
 [ids]
 sudo_users = [
     1027380375028244551, # roc.py - lead dev
