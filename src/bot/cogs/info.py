@@ -47,7 +47,7 @@ class Info(Cog):
         name="changelog",
         description=f"View {core.config.data['bot']['name']}'s changelog",
     )
-    async def ping(self, ctx: Interaction):
+    async def changelog(self, ctx: Interaction):
         """Sends the most recent changes to the bot's github"""
         await ctx.response.defer(ephemeral=True)
 
