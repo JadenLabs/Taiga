@@ -26,9 +26,6 @@ class Core:
         env_exists = os.path.exists(env.env_path)
         if not env_exists:
             logger.critical(f"The `{env.name}` env file does not exist")
-            envs = self.get_envs()
-            envs_str = [env.env_path for env in envs]
-            logger.debug(f"Other available envs: {envs_str}")
             exit(0)
 
         # Load dotenv
@@ -38,6 +35,10 @@ class Core:
         BOT_TOKEN = os.getenv("BOT_TOKEN")
         assert BOT_TOKEN, f"The BOT_TOKEN value in `{env.env_path}` is not set"
         logger.debug(f"Checked `BOT_TOKEN`, value present")
+
+        MONGO_URI = os.getenv("MONGO_URI")
+        assert MONGO_URI, f"The MONGO_URI value in `{env.env_path}` is not set"
+        logger.debug(f"Checked `MONGO_URI`, value present")
 
 
 try:
