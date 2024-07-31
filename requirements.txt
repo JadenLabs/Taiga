@@ -1,3 +1,4 @@
+PIL
 toml
 discord
 cogwatch
