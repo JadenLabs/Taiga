@@ -36,3 +36,13 @@ BMF = "<:BMF:1268049231483109438>"
 BME = "<:BME:1268049217352499200>"
 BRF = "<:BRF:1268049203184013323>"
 BRE = "<:BRE:1268049187958952029>"
+
+[cooldowns]
+pet = 43200
+
+[messages]
+fishing = [
+    "How much grass have you touched this week?",
+    "You're petting Taiga daily, right??",
+    "Hail Taiga.",
+]
