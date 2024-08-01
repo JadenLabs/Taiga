@@ -5,7 +5,7 @@ Used from the project root
 import json
 from src.database.database import database
 
-FILE = "users.json"
+FILE = "../users.json"
 COLLECTION_NAME = "users"
 collection = database.db[COLLECTION_NAME]
 
