@@ -1,7 +1,7 @@
 import os
-from pymongo import MongoClient, ASCENDING
+from pymongo import MongoClient
 from pymongo.server_api import ServerApi
-from src.core import core, logger
+from src.core import logger
 
 
 class Database:
@@ -25,5 +25,4 @@ class Database:
 
 
 MONGO_URI = os.getenv("MONGO_URI")
-logger.debug(MONGO_URI)
 database = Database(MONGO_URI)
