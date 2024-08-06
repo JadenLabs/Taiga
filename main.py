@@ -10,7 +10,7 @@ async def start():
     try:
         await bot.start()
     except asyncio.CancelledError:
-        logger.warn("Asyncio CancelledError: stopping process...")
+        logger.warning("Asyncio CancelledError: stopping process...")
         await bot.close()
 
 
