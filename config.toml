@@ -50,6 +50,9 @@ max = 500
 [cooldowns]
 pet = 43200
 
+[leaderboards]
+default_page_size = 10
+
 [messages]
 fishing = [
     "How much grass have you touched this week?",
