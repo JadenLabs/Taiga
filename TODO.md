@@ -17,5 +17,4 @@
 -   [ ] Reimplement the bully command
 -   [ ] Go through and add comments for everything
 -   [ ] Improve the [[README.md]]
--   [ ] Figure out what to do with fishing
--             [ ] Have it based on chat activity maybe
+-   [ ] Figure out what to do with fishing - have it based on chat activity maybe
