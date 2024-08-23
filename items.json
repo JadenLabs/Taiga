@@ -1,0 +1,20 @@
+[
+    {
+        "id": 1,
+        "name": "Golden Beans",
+        "description": "Golden Toe Beans: Given to the first 12 users to use the bot, this item thanks the super-early supporters. Taiga Supremacy. ✨",
+        "emoji": null
+    },
+    {
+        "id": 2,
+        "name": "Bass",
+        "description": "A basic fish - can be fed to Taiga for 1 energy point.",
+        "emoji": null
+    },
+    {
+        "id": 3,
+        "name": "Pebble",
+        "description": "A small pebble, how'd this get here?",
+        "emoji": null
+    }
+]
