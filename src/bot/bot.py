@@ -2,6 +2,7 @@ import os
 from cogwatch import watch
 from discord import Intents, CustomActivity
 from discord.ext.commands import AutoShardedBot
+from src.utils import logger, get_args
 from src.utils import logger
 from src.core import core
 
@@ -36,7 +37,7 @@ class Bot(AutoShardedBot):
         await self.load_extensions()
         await self.tree.sync()
 
-    @watch(path="src/bot/cogs", colors=True)
+    @watch(path="src/bot/cogs", colors=True, debug=True)
     async def on_ready(self):
         """On ready event, sets presence"""
         try:
