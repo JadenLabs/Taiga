@@ -30,9 +30,14 @@ The official Taiga bot, from the [Taiga supremacy](https://discord.gg/9F5npU4Jya
 5. Open [config.toml](./config.toml) and adjust it to your needs. Like the .env, if you use a name other than `config.toml` for the config, use the `-c <config file>` flag.
 6. Run the bot
     ```bash
-    python [-O] main.py
+    python [-O] main.py [-e ENV] [-c CONFIG]
     ```
-    `-O` sets `__debug__` to `False`, disabling cogwatch. 
+    `-O` sets `__debug__` to `False`, disabling cogwatch.
+
+    Example:
+    ```bash
+    python -O main.py
+    ```
 
 ### Usage
 
