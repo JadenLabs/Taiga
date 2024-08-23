@@ -1,8 +1,8 @@
 from discord import Interaction, AppCommandType
 from discord.ext.commands import Cog, CheckFailure, Context, CommandError
 from src.bot.bot import Bot
-from src.core import core
-from src.utils import logger
+from src.core import logger
+from src.utils.stats import increment_cmds_ran
 from src.messages.errors import basic_error_embed
 
 import traceback
@@ -36,8 +36,9 @@ class Cmds(Cog):
     async def on_app_command_completion(
         self, ctx: Interaction, command: AppCommandType
     ):
+        new_cmds = increment_cmds_ran()
         from_message = f"${ctx.guild.id}" if ctx.guild else "in DM"
-        logger.info(f"{command.name} done {from_message} @{ctx.user.id}")
+        logger.info(f"[{new_cmds}] {command.name} done {from_message} @{ctx.user.id}")
 
 
 async def setup(bot: Bot):
