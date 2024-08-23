@@ -14,6 +14,7 @@
 
 ## General TODO
 
+-   [ ] Validate requirements.txt
 -   [ ] Reimplement the bully command - with a cost this time
 -   [ ] Go through and add comments for everything
 -   [ ] Improve the [[README.md]]
