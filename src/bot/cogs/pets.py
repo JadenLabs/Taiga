@@ -80,7 +80,7 @@ class Pet(Cog):
                 last_pet_dif = time_now - time_last_pet
                 pet_cooldown = core.config.data["cooldowns"]["pet"]
 
-                if last_pet_dif.seconds < pet_cooldown:
+                if last_pet_dif.total_seconds() < pet_cooldown:
                     cooldown_over = time_last_pet + timedelta(seconds=pet_cooldown)
                     cooldown_over_ts = f"<t:{int(cooldown_over.timestamp())}:R>"
 
