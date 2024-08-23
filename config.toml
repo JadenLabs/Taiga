@@ -7,13 +7,13 @@ prefix = "t."
 [github]
 owner = "JadenLabs"
 name = "Taiga"
-commits_per_page = 9
+commits_per_page = 10
 
 [ids]
 sudo_users = [
     1027380375028244551, # roc.py - lead dev
 ]
-home_guild = 0 # 1190449108415152199 - taiga supremacy
+home_guild = 1190449108415152199 # taiga supremacy
 
 [colors]
 primary = 0xE7C7EF
@@ -23,14 +23,12 @@ success = 0x00D355
 error = 0xDF0043
 
 [emojis]
-# Core emojis
 arrow_right = "<:arrow_right:1268049170267373589>"
 chat = "<:chat:1268049281051525164>"
 dns = "<:dns:1268049301620265011>"
 true = "<:true:1268049349145788540>"
 false = "<:false:1268049317520740394>"
 ping = "<:ping:1268049331064143924>"
-# Taiga emojis
 fish = "🐟"
 heart = "<:heart:1276311384250122353>"
 beans = "<:beans:1276307198338797609>"
