@@ -6,15 +6,16 @@
 -   [x] Pet
 -   [x] Leaderboard util
 -   [x] Pet and beans lbs
--   [ ] Profile cmd
--   [ ] Bot stats
--   [ ] MIGRATE DB (sqlite3 -> mongodb)
+-   [x] Profile cmd
+-   [x] Bot stats in db
+-   [x] MIGRATE DB (sqlite3 -> mongodb)
 
 ---
 
 ## General TODO
 
--   [ ] Reimplement the bully command
+-   [ ] Reimplement the bully command - with a cost this time
 -   [ ] Go through and add comments for everything
 -   [ ] Improve the [[README.md]]
 -   [ ] Figure out what to do with fishing - have it based on chat activity maybe
+-   [ ] Work on a better automatic setup system
