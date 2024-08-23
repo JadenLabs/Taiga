@@ -17,11 +17,9 @@ class Database:
 
         # TODO, code smell, make more dynamic later
         self.items = self.db.items
-        self.shop = self.db.shop
         self.staff = self.db.staff
         self.stats = self.db.stats
         self.users = self.db.users
-        self.user_items = self.db.user_items
 
 
 MONGO_URI = os.getenv("MONGO_URI")
