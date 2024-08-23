@@ -31,9 +31,10 @@ true = "<:true:1268049349145788540>"
 false = "<:false:1268049317520740394>"
 ping = "<:ping:1268049331064143924>"
 # Taiga emojis
-beans = "🫘"
 fish = "🐟"
-heart = ":purple_heart:"
+heart = "<:heart:1276311384250122353>"
+beans = "<:beans:1276307198338797609>"
+golden_beans = "<:golden_beans:1276304436284882944>"
 loading = "<a:loading:1193049795082858597>"
 BLF = "<:BLF:1268049263187722311>"
 BLE = "<:BLE:1268049249392656484>"
@@ -48,7 +49,7 @@ min = 200
 max = 500
 
 [cooldowns]
-pet = 43200
+pet = 43200 # 12hr
 
 [leaderboards]
 default_page_size = 10
