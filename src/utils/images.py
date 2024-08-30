@@ -20,7 +20,7 @@ def resize_and_crop(image: Image, size: tuple) -> Image:
         new_height = int(target_width / aspect_ratio)
 
     # Resize the image
-    resized_image = image.resize((new_width, new_height), Image.ANTIALIAS)
+    resized_image = image.resize((new_width, new_height), Image)
 
     # Crop the center
     left = (new_width - target_width) / 2
