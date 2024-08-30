@@ -1,5 +1,11 @@
+import os
 import logging
 from colorlog import ColoredFormatter
+
+# Validate logs folder
+logs_dir_exists = os.path.exists("./logs/")
+if not logs_dir_exists:
+    os.mkdir("./logs/")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
