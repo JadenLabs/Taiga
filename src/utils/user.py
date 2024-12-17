@@ -6,6 +6,7 @@ DEFAULT_USER = {
     "pets": 0,
     "lastPet": None,
     "beans": 0,
+    "streak": 0,
 }
 
 

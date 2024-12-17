@@ -31,7 +31,7 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
 
     @app_commands.command(name="beans", description="Shows the beans leaderboard!")
     async def beans(self, ctx: Interaction, page: int = 1):
-        """Shows the pets leaderboard!
+        """Shows the beans leaderboard!
 
         Args:
             ctx (Interaction): The command interaction.
@@ -39,6 +39,20 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
         """
         try:
             await self.send_leaderboard(ctx, page, "beans")
+        except Exception as e:
+            print_exc()
+            logger.error("An error has occurred:", e)
+
+    @app_commands.command(name="streaks", description="Shows the streaks leaderboard!")
+    async def streaks(self, ctx: Interaction, page: int = 1):
+        """Shows the streaks leaderboard!
+
+        Args:
+            ctx (Interaction): The command interaction.
+            page (int, optional): The page of the leaderboard to view. Defaults to 1.
+        """
+        try:
+            await self.send_leaderboard(ctx, page, "streak")
         except Exception as e:
             print_exc()
             logger.error("An error has occurred:", e)
@@ -59,6 +73,7 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
             return f"**{doc['rank']}.** ` {doc[field]} ` <@{doc['_id']}>"
 
         field_fmt = field.capitalize()
+        field_fmt += "s" if field[-1] != "s" else ""
 
         description = f"Here are the current leaders for {field_fmt}!\n\n" + "\n".join(
             map(fmt_docs, lb_docs)
