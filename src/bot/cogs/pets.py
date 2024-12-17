@@ -57,13 +57,12 @@ class Pet(Cog):
         """Pets the bot."""
         try:
             # Get user doc
-            user_doc = find_user_or_default(ctx.user.id)
+            user_doc: dict = find_user_or_default(ctx.user.id)
             last_pet = user_doc["lastPet"]
+            continue_streak = False
 
             # Check last pet
-            # if (
-            #     ctx.user.id not in core.config.data["ids"]["sudo_users"]
-            # ):  # ! COMMENT OUT WHEN NOT IN DEV MODE
+
             if last_pet is not None:
                 # Format the last pet into a datetime
                 date_format = "%Y-%m-%d %H:%M:%S.%f %z"
@@ -80,6 +79,9 @@ class Pet(Cog):
                 last_pet_dif = time_now - time_last_pet
                 pet_cooldown = core.config.data["cooldowns"]["pet"]
 
+                # if (
+                #     ctx.user.id not in core.config.data["ids"]["sudo_users"]
+                # ):  # ! COMMENT OUT WHEN NOT IN DEV MODE
                 if last_pet_dif.total_seconds() < pet_cooldown:
                     cooldown_over = time_last_pet + timedelta(seconds=pet_cooldown)
                     cooldown_over_ts = f"<t:{int(cooldown_over.timestamp())}:R>"
@@ -92,21 +94,28 @@ class Pet(Cog):
 
                     return await ctx.response.send_message(embed=embed)
 
+                # Check if user has pet in the last 24 hrs
+                if last_pet_dif.total_seconds() < 86400:
+                    continue_streak = True
+
             # Get random number of beans
             new_beans, new_beans_total = calculate_beans(initial=user_doc["beans"])
 
             # Update database
             new_pets = user_doc["pets"] + 1
             time_now = datetime.now(timezone.utc)
+            new_streak = user_doc.get("streak", 0) + 1 if continue_streak else 0
+            set_query = {
+                "beans": new_beans_total,
+                "pets": new_pets,
+                "lastPet": time_now,
+                "streak": new_streak,
+            }
+
+            # Update doc
             database.users.find_one_and_update(
                 {"_id": str(ctx.user.id)},
-                {
-                    "$set": {
-                        "beans": new_beans_total,
-                        "pets": new_pets,
-                        "lastPet": time_now,
-                    }
-                },
+                {"$set": set_query},
             )
 
             # Get random taiga picture
@@ -126,6 +135,11 @@ class Pet(Cog):
             # Create a file from the buffer
             taiga_file = File(fp=buffer, filename="el_gato.png")
 
+            # Show streak if the streak is greater than or equal to 2
+            fmt_streak = (
+                f"\nYou have a streak of **{new_streak}**!" if new_streak >= 2 else ""
+            )
+
             # Create embed
             embed = Embed(
                 title=f"You have pet {core.config.data['bot']['name']}",
@@ -136,6 +150,7 @@ class Pet(Cog):
 **Stats**
 {core.config.data['emojis']['heart']} Pets `{new_pets}`
 {core.config.data['emojis']['beans']} Beans `{new_beans_total}`
+{fmt_streak}
 """,
             )
             embed.set_image(url=f"attachment://el_gato.png")
