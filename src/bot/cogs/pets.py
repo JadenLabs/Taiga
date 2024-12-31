@@ -10,7 +10,12 @@ from src.database.database import database
 from src.core import core, logger
 from src.bot import Bot
 from src.utils.images import resize_and_crop
-from src.utils.user import find_user_or_default
+from src.utils.user import (
+    find_user_or_default,
+    get_time_last_pet,
+    get_pet_cooldown_over,
+    get_pet_cooldown_over_ts,
+)
 
 ROOT_DIR = os.path.dirname(os.path.abspath("__main__"))
 
@@ -58,33 +63,22 @@ class Pet(Cog):
         try:
             # Get user doc
             user_doc: dict = find_user_or_default(ctx.user.id)
-            last_pet = user_doc["lastPet"]
             continue_streak = False
 
             # Check last pet
-
-            if last_pet is not None:
-                # Format the last pet into a datetime
-                date_format = "%Y-%m-%d %H:%M:%S.%f %z"
-                time_last_pet: datetime = (
-                    datetime.strptime(last_pet, date_format)
-                    if isinstance(last_pet, str)
-                    else last_pet
-                )
-                if time_last_pet.tzinfo is None:
-                    time_last_pet = time_last_pet.replace(tzinfo=timezone.utc)
-
+            time_last_pet = get_time_last_pet(user_doc)
+            if time_last_pet:
                 # Calculate time since last pet in regards to cooldown
                 time_now = datetime.now(timezone.utc)
-                last_pet_dif = time_now - time_last_pet
+                last_pet_dif: timedelta = time_now - time_last_pet
                 pet_cooldown = core.config.data["cooldowns"]["pet"]
 
                 # if (
                 #     ctx.user.id not in core.config.data["ids"]["sudo_users"]
                 # ):  # ! COMMENT OUT WHEN NOT IN DEV MODE
                 if last_pet_dif.total_seconds() < pet_cooldown:
-                    cooldown_over = time_last_pet + timedelta(seconds=pet_cooldown)
-                    cooldown_over_ts = f"<t:{int(cooldown_over.timestamp())}:R>"
+                    cooldown_over = get_pet_cooldown_over(time_last_pet)
+                    cooldown_over_ts = get_pet_cooldown_over_ts(cooldown_over)
 
                     embed = Embed(
                         color=core.config.data["colors"]["error"],
