@@ -59,7 +59,7 @@ class Profile(Cog):
         embed.add_field(
             name="Stats",
             value=f"""\
-{core.config.data['emojis']['heart']} Pets: `{user_doc.get("pets", 0)}`
+{core.config.data['emojis']['heart']} Pets: `{user_doc.get("pets", 0)}` (streak: `{user_doc.get("streak", 0)}`)
 {core.config.data['emojis']['beans']} Beans: `{user_doc.get("beans", 0)}`
 """,
         )
