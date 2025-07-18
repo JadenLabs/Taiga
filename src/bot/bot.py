@@ -40,6 +40,8 @@ class Bot(AutoShardedBot):
     @watch(path="src/bot/cogs", colors=True, debug=True)
     async def on_ready(self):
         """On ready event, sets presence"""
+        logger.info(f"Bot is ready, logged in as {self.user.name}")
+
         try:
             activity: str = core.config.data["bot"]["activity"]
             logger.debug(f"Activity: {activity}")
