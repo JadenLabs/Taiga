@@ -1,4 +1,4 @@
-Pillow==9.5.0
+Pillow
 toml
 pymongo
 discord
