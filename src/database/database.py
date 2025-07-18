@@ -10,6 +10,11 @@ class Database:
         try:
             self.client = MongoClient(mongo_uri, server_api=ServerApi("1"))
             self.db = self.client["main"]
+            ping_res = self.db.command("ping")
+            if ping_res.get("ok") != 1:
+                raise Exception(
+                    "Ping command failed, database connection not established"
+                )
             logger.debug("Database connection successful")
         except Exception as err:
             logger.error(f"An error occured when connecting to the database: {err}")
@@ -23,4 +28,6 @@ class Database:
 
 
 MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise ValueError("MONGO_URI environment variable is not set")
 database = Database(MONGO_URI)
