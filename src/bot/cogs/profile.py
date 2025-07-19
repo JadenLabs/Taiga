@@ -26,7 +26,7 @@ class Profile(Cog):
         """
         await ctx.response.defer()
 
-        user = user if user else ctx.user
+        user = user or ctx.user
         user_doc = database.users.find_one({"_id": str(user.id)})
         if user_doc is None:
             embed = Embed(
