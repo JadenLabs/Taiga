@@ -83,7 +83,7 @@ class Pet(Cog):
                     embed = Embed(
                         color=core.config.data["colors"]["error"],
                         title="Sorry,",
-                        description=f"{core.config.data['bot']['name']} is sleeping right now, please come back {cooldown_over_ts}.",
+                        description=f"{core.config.data['bot']['name']} is out exploring right now, please come back {cooldown_over_ts}.",
                     )
 
                     return await ctx.response.send_message(embed=embed)
