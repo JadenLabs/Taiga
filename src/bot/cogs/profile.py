@@ -55,7 +55,7 @@ class Profile(Cog):
             name="Stats",
             value=f"""\
 {core.config.data['emojis']['heart']} Pets: `{user_doc.get("pets", 0)}`
-{core.config.data['emojis']['streak']} Streak: `{user_doc.get("streak", 0)}` (top: `{user_doc.get("highestStreak", 0)}`)
+{core.config.data['emojis']['streak']} Streak: `{user_doc.get("streak", 0)}` (Best: `{user_doc.get("highestStreak", 0)}`)
 {core.config.data['emojis']['beans']} Beans: `{user_doc.get("beans", 0)}`
 """,
         )
