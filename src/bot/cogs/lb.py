@@ -57,7 +57,21 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
             print_exc()
             logger.error("An error has occurred:", e)
 
-    async def send_leaderboard(self, ctx: Interaction, page: int, field: str):
+    @app_commands.command(name="highest-streaks", description="Shows the all-time highest streaks leaderboard!")
+    async def highest_streaks(self, ctx: Interaction, page: int = 1):
+        """Shows the all-time highest streaks leaderboard!
+
+        Args:
+            ctx (Interaction): The command interaction.
+            page (int, optional): The page of the leaderboard to view. Defaults to 1.
+        """
+        try:
+            await self.send_leaderboard(ctx, page, "highestStreak", "Highest Streak")
+        except Exception as e:
+            print_exc()
+            logger.error("An error has occurred:", e)
+
+    async def send_leaderboard(self, ctx: Interaction, page: int, field: str, field_display: str = None):
         if not ctx.response.is_done():
             await ctx.response.defer()
 
@@ -69,19 +83,21 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
 
         lb_docs = leaderboard.get_page(page)
 
+        field_display = field_display or field
+        field_display = field_display.title()
+        field_display += "s" if field_display[-1] != "s" else ""
+
         def fmt_docs(doc: dict):
-            return f"**{doc['rank']}.** ` {doc[field]} ` <@{doc['_id']}>"
+            return f"**{doc['rank']}.** ` {doc.get(field, 0)} ` <@{doc['_id']}>"
 
-        field_fmt = field.capitalize()
-        field_fmt += "s" if field[-1] != "s" else ""
 
-        description = f"Here are the current leaders for {field_fmt}!\n\n" + "\n".join(
+        description = f"Here are the current leaders for {field_display}!\n\n" + "\n".join(
             map(fmt_docs, lb_docs)
         )
         footer = f"Page {page} of {leaderboard.page_count}"
 
         embed = Embed(
-            title=f"{field_fmt} Leaderboard!",
+            title=f"{field_display} Leaderboard!",
             description=description,
             color=core.config.data["colors"]["primary"],
         )
