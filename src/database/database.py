@@ -9,7 +9,10 @@ class Database:
         logger.debug("Attempting database connection")
         try:
             self.client = MongoClient(mongo_uri, server_api=ServerApi("1"))
-            self.db = self.client["main"]
+            if os.getenv("dev"):
+                self.db = self.client["dev"]
+            else:
+                self.db = self.client["main"]
             ping_res = self.db.command("ping")
             if ping_res.get("ok") != 1:
                 raise Exception(
