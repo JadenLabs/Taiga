@@ -9,6 +9,7 @@ DEFAULT_USER = {
     "lastPet": None,
     "beans": 0,
     "streak": 0,
+    "highestStreak": 0,
 }
 
 
@@ -26,7 +27,7 @@ def find_user_or_default(id: int | str, default_user: dict = DEFAULT_USER):
         return user_doc
     except Exception as e:
         traceback.print_exc()
-        logger.error(f"An error has occured: ", e)
+        logger.error(f"An error has occurred: ", e)
 
 def get_time_last_pet(user_doc: dict):
     last_pet = user_doc.get("lastPet")
