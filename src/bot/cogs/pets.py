@@ -73,26 +73,24 @@ class Pet(Cog):
                 last_pet_dif: timedelta = time_now - time_last_pet
                 pet_cooldown = core.config.data["cooldowns"]["pet"]
 
-                # if (
-                #     ctx.user.id not in core.config.data["ids"]["sudo_users"]
-                # ):  # ! COMMENT OUT WHEN NOT IN DEV MODE
-                if last_pet_dif.total_seconds() < pet_cooldown:
-                    cooldown_over = get_pet_cooldown_over(time_last_pet)
-                    cooldown_over_ts = get_pet_cooldown_over_ts(cooldown_over)
+                if not os.getenv("DEV"):
+                    if last_pet_dif.total_seconds() < pet_cooldown:
+                        cooldown_over = get_pet_cooldown_over(time_last_pet)
+                        cooldown_over_ts = get_pet_cooldown_over_ts(cooldown_over)
 
-                    embed = Embed(
-                        color=core.config.data["colors"]["error"],
-                        title="Sorry,",
-                        description=f"{core.config.data['bot']['name']} is out exploring right now, please come back {cooldown_over_ts}.",
-                    )
+                        embed = Embed(
+                            color=core.config.data["colors"]["error"],
+                            title="Sorry,",
+                            description=f"{core.config.data['bot']['name']} is out exploring right now, please come back {cooldown_over_ts}.",
+                        )
 
-                    return await ctx.response.send_message(embed=embed)
+                        return await ctx.response.send_message(embed=embed)
 
                 # Check if user has pet in the last 24 hrs
-                if last_pet_dif.total_seconds() < 86400:
+                if last_pet_dif.total_seconds() < 86400 or os.getenv("DEV"):
                     continue_streak = True
 
-            # Get random number of beans
+            # Get a random number of beans
             new_beans, new_beans_total = calculate_beans(initial=user_doc["beans"])
 
             # Update database
@@ -113,7 +111,7 @@ class Pet(Cog):
                 {"$set": set_query},
             )
 
-            # Get random taiga picture
+            # Get a random taiga picture
             taiga_path = get_random_cat()
             taiga_file = File(taiga_path, filename="el_gato.png")
 
