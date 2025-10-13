@@ -104,6 +104,7 @@ class Pet(Cog):
                 "pets": new_pets,
                 "lastPet": time_now,
                 "streak": new_streak,
+                "highestStreak": max(new_streak, user_doc.get("highestStreak", 0)),
             }
 
             # Update doc
