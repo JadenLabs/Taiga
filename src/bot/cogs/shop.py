@@ -53,7 +53,7 @@ class Items:
 
     cat_toy = Item(
         "cat_toy",
-        f"Keeps {core.config.data['bot']['name']} from sleeping as long.",
+        f"Keeps {core.config.data['bot']['name']} from sleeping as long (−1hr cooldown).",
         cost=100_000,
         ownership_limit=8,
         emoji="🧶",
@@ -62,7 +62,7 @@ class Items:
 
     catnip = Item(
         "catnip",
-        f"Gets {core.config.data['bot']['name']} completely wired. Can't sleep like this.",
+        f"Gets {core.config.data['bot']['name']} wired (-30min cooldown).",
         cost=35_000,
         ownership_limit=4,
         emoji="🌿",
@@ -71,7 +71,7 @@ class Items:
 
     energy_drink = Item(
         "energy_drink",
-        f"{core.config.data['bot']['name']} doesn't need sleep anymore (she does, but still).",
+        f"{core.config.data['bot']['name']} doesn't need sleep anymore (-2hr cooldown).",
         cost=220_000,
         ownership_limit=1,
         emoji="⚡",
