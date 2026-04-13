@@ -10,6 +10,7 @@ DEFAULT_USER = {
     "beans": 0,
     "streak": 0,
     "highestStreak": 0,
+    "inventory": {},
 }
 
 

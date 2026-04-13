@@ -1,13 +1,10 @@
+from datetime import datetime, timezone, timedelta
 from discord import app_commands, Interaction, Embed, User
 from discord.ext.commands import Cog
 from src.core import core
 from src.bot import Bot
 from src.database.database import database
-from src.utils.user import (
-    get_time_last_pet,
-    get_pet_cooldown_over,
-    get_pet_cooldown_over_ts,
-)
+from src.bot.cogs.shop import get_cooldown_reduction, MIN_COOLDOWN
 
 
 class Profile(Cog):
@@ -37,19 +34,28 @@ class Profile(Cog):
             return await ctx.edit_original_response(embed=embed)
 
         # Calculate cooldowns
-        time_last_pet = get_time_last_pet(user_doc)
-        if time_last_pet:
-            cooldown_over = get_pet_cooldown_over(time_last_pet)
-            cooldown_over_ts = get_pet_cooldown_over_ts(cooldown_over)
-        else:
-            cooldown_over_ts = "`has not pet`"
+        last_pet = user_doc.get("lastPet")
+        if last_pet is not None:
+            date_format = "%Y-%m-%d %H:%M:%S.%f %z"
+            time_last_pet: datetime = (
+                datetime.strptime(last_pet, date_format)
+                if isinstance(last_pet, str)
+                else last_pet
+            )
+            if time_last_pet.tzinfo is None:
+                time_last_pet = time_last_pet.replace(tzinfo=timezone.utc)
 
-        # Create embed
+            inventory = user_doc.get("inventory", {})
+            base_cooldown = core.config.data["cooldowns"]["pet"]
+            pet_cooldown = max(base_cooldown - get_cooldown_reduction(inventory), MIN_COOLDOWN)
+            cooldown_over = time_last_pet + timedelta(seconds=pet_cooldown)
+            cooldown_over_ts = f"<t:{int(cooldown_over.timestamp())}:R>"
+        else:
+            cooldown_over_ts = "`never`"
+
         embed = Embed(
             color=core.config.data["colors"]["invisible"],
-            title=f"{user.name}'s Profile",
-            description=f"""\
-""",
+            title=f"{user.display_name}'s Profile",
         )
         embed.add_field(
             name="Stats",
@@ -69,7 +75,6 @@ class Profile(Cog):
         if user.avatar.url:
             embed.set_thumbnail(url=user.avatar.url)
 
-        # Send response
         await ctx.edit_original_response(embed=embed)
 
 
