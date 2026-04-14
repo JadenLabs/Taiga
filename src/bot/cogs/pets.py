@@ -126,6 +126,7 @@ class Pet(Cog):
                 title=f"You pet {core.config.data['bot']['name']}!",
                 color=core.config.data["colors"]["primary"],
                 description=(
+                    "Taiga has given you some beans!"
                     f"{core.config.data['emojis']['beans']} `+{new_beans}` beans\n\n"
                     f"**Stats**\n"
                     f"{core.config.data['emojis']['heart']} Pets `{new_pets}`\n"
