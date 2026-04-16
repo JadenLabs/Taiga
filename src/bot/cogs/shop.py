@@ -9,21 +9,13 @@ MIN_COOLDOWN = 3600  # 1 hour floor regardless of items
 
 
 class Item:
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        cost: int,
-        ownership_limit: int = 0,
-        emoji: str = "🔹",
-        cooldown_reduction: int = 0,
-    ):
-        self.name = name
-        self.description = description
-        self.cost = cost
-        self.ownership_limit = ownership_limit
-        self.emoji = emoji
-        self.cooldown_reduction = cooldown_reduction  # seconds per item owned
+    def __init__(self, data: dict):
+        self.name: str = data["name"]
+        self.description: str = data["description"]
+        self.cost: int = data["cost"]
+        self.ownership_limit: int = data.get("ownership_limit", 0)
+        self.emoji: str = data.get("emoji", "🔹")
+        self.cooldown_reduction: int = data.get("cooldown_reduction", 0)
 
     def fmt_name(self) -> str:
         return self.name.replace("_", " ").title()
@@ -32,65 +24,31 @@ class Item:
         notes = []
         if self.cooldown_reduction > 0:
             mins = self.cooldown_reduction // 60
-            notes.append(f"−{mins}min cooldown each" if self.ownership_limit != 1 else f"−{mins}min cooldown")
+            notes.append(
+                f"−{mins}min cooldown each" if self.ownership_limit != 1 else f"−{mins}min cooldown"
+            )
         if self.ownership_limit > 0:
             notes.append(f"limit {self.ownership_limit}")
-        subtext = f" · ".join(notes)
+        subtext = " · ".join(notes)
         return (
             f"{self.emoji} **{self.fmt_name()}** — `{self.cost:,}` beans\n"
             f"-# {self.description}" + (f" · {subtext}" if subtext else "")
         )
 
 
-class Items:
-    alarm_clock = Item(
-        "alarm_clock",
-        f"Reminds you when {core.config.data['bot']['name']} can be pet.",
-        cost=50_000,
-        ownership_limit=1,
-        emoji="⏰",
-    )
+SHOP_INVENTORY: list[Item] = [
+    Item(data) for data in core.config.data["shop"]["items"]
+]
 
-    cat_toy = Item(
-        "cat_toy",
-        f"Keeps {core.config.data['bot']['name']} from sleeping as long",
-        cost=100_000,
-        ownership_limit=8,
-        emoji="🧶",
-        cooldown_reduction=3600,
-    )
-
-    catnip = Item(
-        "catnip",
-        f"Gets {core.config.data['bot']['name']} wired",
-        cost=35_000,
-        ownership_limit=4,
-        emoji="🌿",
-        cooldown_reduction=1800,
-    )
-
-    energy_drink = Item(
-        "energy_drink",
-        f"{core.config.data['bot']['name']} doesn't need sleep anymore",
-        cost=220_000,
-        ownership_limit=1,
-        emoji="⚡",
-        cooldown_reduction=7200,
-    )
-
-
-SHOP_INVENTORY = [Items.alarm_clock, Items.cat_toy, Items.catnip, Items.energy_drink]
-
-ITEM_MAP = {item.name: item for item in SHOP_INVENTORY}
+ITEM_MAP: dict[str, Item] = {item.name: item for item in SHOP_INVENTORY}
 
 
 def get_cooldown_reduction(inventory: dict) -> int:
     """Returns total cooldown reduction in seconds from owned items."""
-    reduction = 0
-    for item in SHOP_INVENTORY:
-        count = inventory.get(item.name, 0)
-        reduction += count * item.cooldown_reduction
-    return reduction
+    return sum(
+        inventory.get(item.name, 0) * item.cooldown_reduction
+        for item in SHOP_INVENTORY
+    )
 
 
 class Shop(Cog):
@@ -116,10 +74,8 @@ class Shop(Cog):
     @app_commands.describe(item="The item to purchase")
     @app_commands.choices(
         item=[
-            app_commands.Choice(name="⏰ Alarm Clock", value="alarm_clock"),
-            app_commands.Choice(name="🧶 Cat Toy", value="cat_toy"),
-            app_commands.Choice(name="🌿 Catnip", value="catnip"),
-            app_commands.Choice(name="⚡ Energy Drink", value="energy_drink"),
+            app_commands.Choice(name=f"{i.emoji} {i.fmt_name()}", value=i.name)
+            for i in SHOP_INVENTORY
         ]
     )
     async def buy(self, ctx: Interaction, item: app_commands.Choice[str]):

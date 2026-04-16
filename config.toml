@@ -53,6 +53,38 @@ pet = 43200 # 12hr
 [leaderboards]
 default_page_size = 10
 
+[[shop.items]]
+name = "alarm_clock"
+description = "Reminds you when Taiga can be pet."
+cost = 50000
+ownership_limit = 1
+emoji = "⏰"
+cooldown_reduction = 0
+
+[[shop.items]]
+name = "cat_toy"
+description = "Keeps Taiga from sleeping as long"
+cost = 100000
+ownership_limit = 8
+emoji = "🧶"
+cooldown_reduction = 3600
+
+[[shop.items]]
+name = "catnip"
+description = "Gets Taiga wired"
+cost = 35000
+ownership_limit = 4
+emoji = "🌿"
+cooldown_reduction = 1800
+
+[[shop.items]]
+name = "energy_drink"
+description = "Taiga doesn't need sleep anymore"
+cost = 220000
+ownership_limit = 1
+emoji = "⚡"
+cooldown_reduction = 7200
+
 [messages]
 fishing = [
     "How much grass have you touched this week?",
