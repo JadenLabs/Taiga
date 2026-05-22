@@ -25,22 +25,19 @@ def get_random_cat():
     return taiga_path
 
 
+def streak_multiplier(streak: int) -> float:
+    """Quadratic streak multiplier capped at 40×.
+    M(n) = 1 + n*(n-1)/76 — designed so 20 consecutive pets total ~50,000 beans."""
+    return min(1.0 + (streak * (streak - 1)) / 76.0, 40.0)
+
+
 def calculate_beans(
     initial: int = 0,
     min: int = core.config.data["beans"]["pets"]["min"],
     max: int = core.config.data["beans"]["pets"]["max"],
+    multiplier: float = 1.0,
 ):
-    """Calculates a new random number of beans and adds it to the initial.
-
-    Args:
-        initial (int, optional): The initial value of beans. Defaults to 0.
-        min (int, optional): The min number of beans given. Defaults to core.config.data["beans"]["pets"]["min"].
-        max (int, optional): The max number of beans given. Defaults to core.config.data["beans"]["pets"]["max"].
-
-    Returns:
-        _type_: _description_
-    """
-    new_beans = random.randint(min, max)
+    new_beans = round(random.randint(min, max) * multiplier)
     new_total = initial + new_beans
     return new_beans, new_total
 
@@ -94,12 +91,15 @@ class Pet(Cog):
                 if last_pet_dif.total_seconds() < 86400 or os.getenv("DEV"):
                     continue_streak = True
 
-            # Get random number of beans
-            new_beans, new_beans_total = calculate_beans(initial=user_doc["beans"])
-
-            # Update database
+            # Calculate streak before beans so multiplier can use it
             new_pets = user_doc["pets"] + 1
             new_streak = user_doc.get("streak", 0) + 1 if continue_streak else 0
+            multiplier = streak_multiplier(new_streak)
+            new_beans, new_beans_total = calculate_beans(
+                initial=user_doc["beans"], multiplier=multiplier
+            )
+
+            # Update database
             database.users.find_one_and_update(
                 {"_id": str(ctx.user.id)},
                 {"$set": {
@@ -121,7 +121,8 @@ class Pet(Cog):
             buffer.seek(0)
             taiga_file = File(fp=buffer, filename="el_gato.png")
 
-            streak_line = f"\nStreak: **{new_streak}**!" if new_streak >= 2 else ""
+            multiplier_str = f" `×{multiplier:.2f}`" if multiplier > 1.01 else ""
+            streak_line = f"\nStreak: **{new_streak}**{multiplier_str}!" if new_streak >= 2 else ""
             embed = Embed(
                 title=f"You pet {core.config.data['bot']['name']}!",
                 color=core.config.data["colors"]["primary"],

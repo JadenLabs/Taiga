@@ -44,8 +44,8 @@ BRE = "<:BRE:1268049187958952029>"
 
 [beans]
 [beans.pets]
-min = 200
-max = 500
+min = 800
+max = 1200
 
 [cooldowns]
 pet = 43200 # 12hr
