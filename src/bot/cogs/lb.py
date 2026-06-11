@@ -71,6 +71,20 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
             print_exc()
             logger.error("An error has occurred:", e)
 
+    @app_commands.command(name="golden-beans", description="Shows the golden beans (prestige) leaderboard!")
+    async def golden_beans(self, ctx: Interaction, page: int = 1):
+        """Shows the golden beans leaderboard!
+
+        Args:
+            ctx (Interaction): The command interaction.
+            page (int, optional): The page of the leaderboard to view. Defaults to 1.
+        """
+        try:
+            await self.send_leaderboard(ctx, page, "goldenBeans", "Golden Bean")
+        except Exception as e:
+            print_exc()
+            logger.error("An error has occurred:", e)
+
     async def send_leaderboard(self, ctx: Interaction, page: int, field: str, field_display: str = None):
         if not ctx.response.is_done():
             await ctx.response.defer()
@@ -113,10 +127,10 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
             view.add_item(next_button)
 
         async def prev_callback(interaction: Interaction):
-            await self.send_leaderboard(interaction, page - 1, field)
+            await self.send_leaderboard(interaction, page - 1, field, field_display)
 
         async def next_callback(interaction: Interaction):
-            await self.send_leaderboard(interaction, page + 1, field)
+            await self.send_leaderboard(interaction, page + 1, field, field_display)
 
         prev_button.callback = partial(prev_callback)
         next_button.callback = partial(next_callback)

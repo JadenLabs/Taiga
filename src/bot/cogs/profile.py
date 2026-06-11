@@ -4,7 +4,22 @@ from discord.ext.commands import Cog
 from src.core import core
 from src.bot import Bot
 from src.database.database import database
-from src.bot.cogs.shop import get_cooldown_reduction, MIN_COOLDOWN
+from src.bot.cogs.shop import (
+    get_cooldown_reduction,
+    get_bean_multiplier,
+    get_generator_rate,
+    SHOP_INVENTORY,
+    MIN_COOLDOWN,
+)
+
+
+def get_flair(inventory: dict) -> str:
+    """Owned cosmetic emojis, shown next to the profile name."""
+    return "".join(
+        item.emoji
+        for item in SHOP_INVENTORY
+        if item.category == "cosmetics" and inventory.get(item.name, 0) > 0
+    )
 
 
 class Profile(Cog):
@@ -53,18 +68,31 @@ class Profile(Cog):
         else:
             cooldown_over_ts = "`never`"
 
+        inventory = user_doc.get("inventory", {})
+        flair = get_flair(inventory)
+        title = f"{user.display_name}'s Profile"
+        if flair:
+            title += f" {flair}"
+
         embed = Embed(
             color=core.config.data["colors"]["invisible"],
-            title=f"{user.display_name}'s Profile",
+            title=title,
         )
-        embed.add_field(
-            name="Stats",
-            value=f"""\
+
+        stats = f"""\
 {core.config.data['emojis']['heart']} Pets: `{user_doc.get("pets", 0)}`
 {core.config.data['emojis']['streak']} Streak: `{user_doc.get("streak", 0)}` (Best: `{user_doc.get("highestStreak", 0)}`)
 {core.config.data['emojis']['beans']} Beans: `{user_doc.get("beans", 0)}`
-""",
-        )
+"""
+        golden_beans = user_doc.get("goldenBeans", 0)
+        if golden_beans > 0:
+            multiplier = get_bean_multiplier(user_doc)
+            stats += f"{core.config.data['emojis']['golden_beans']} Golden Beans: `{golden_beans}` (×{multiplier:.2f})\n"
+        rate = get_generator_rate(inventory)
+        if rate > 0:
+            stats += f"🌱 Production: `{rate:,}`/hr\n"
+
+        embed.add_field(name="Stats", value=stats)
         embed.add_field(
             name="Cooldowns",
             value=f"""\

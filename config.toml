@@ -47,11 +47,26 @@ BRE = "<:BRE:1268049187958952029>"
 min = 800
 max = 1200
 
+[beans.fish]
+min = 150
+max = 450
+
 [cooldowns]
 pet = 43200 # 12hr
+fish = 1800 # 30min
 
 [leaderboards]
 default_page_size = 10
+
+[prestige]
+base_cost = 1000000 # first golden bean costs 1M beans
+cost_growth = 3     # each subsequent golden bean costs 3x more
+bonus = 0.25        # permanent bean multiplier per golden bean
+
+[generators]
+collect_cap_hours = 12 # max hours of income /collect can accrue
+
+# ───── Boosts ─────
 
 [[shop.items]]
 name = "alarm_clock"
@@ -60,14 +75,15 @@ cost = 50000
 ownership_limit = 1
 emoji = "⏰"
 cooldown_reduction = 0
+category = "boosts"
 
 [[shop.items]]
-name = "cat_toy"
-description = "Keeps Taiga from sleeping as long"
-cost = 100000
-ownership_limit = 8
-emoji = "🧶"
-cooldown_reduction = 3600
+name = "streak_alarm"
+description = "Warns you 2 hours before your streak expires."
+cost = 120000
+ownership_limit = 1
+emoji = "🔔"
+category = "boosts"
 
 [[shop.items]]
 name = "catnip"
@@ -76,6 +92,16 @@ cost = 35000
 ownership_limit = 4
 emoji = "🌿"
 cooldown_reduction = 1800
+category = "boosts"
+
+[[shop.items]]
+name = "cat_toy"
+description = "Keeps Taiga from sleeping as long"
+cost = 100000
+ownership_limit = 8
+emoji = "🧶"
+cooldown_reduction = 3600
+category = "boosts"
 
 [[shop.items]]
 name = "energy_drink"
@@ -84,6 +110,115 @@ cost = 220000
 ownership_limit = 1
 emoji = "⚡"
 cooldown_reduction = 7200
+category = "boosts"
+
+[[shop.items]]
+name = "golden_food_bowl"
+description = "Taiga eats in style. +10% beans from everything."
+cost = 300000
+ownership_limit = 5
+emoji = "🥣"
+bean_bonus = 0.10
+category = "boosts"
+
+[[shop.items]]
+name = "lucky_collar"
+description = "5% chance a pet is a Golden Pet worth 10x beans."
+cost = 500000
+ownership_limit = 1
+emoji = "🍀"
+category = "boosts"
+
+[[shop.items]]
+name = "fishing_rod"
+description = "Unlocks /fish — catch beans every 30 minutes."
+cost = 75000
+ownership_limit = 1
+emoji = "🎣"
+category = "boosts"
+
+# ───── Generators ─────
+
+[[shop.items]]
+name = "bean_sprout"
+description = "A humble sprout. Grows beans while you sleep."
+cost = 5000
+emoji = "🌱"
+beans_per_hour = 50
+price_growth = 1.15
+category = "generators"
+
+[[shop.items]]
+name = "bean_farm"
+description = "Industrial-scale bean agriculture."
+cost = 75000
+emoji = "🚜"
+beans_per_hour = 600
+price_growth = 1.15
+category = "generators"
+
+[[shop.items]]
+name = "bean_cannery"
+description = "Cans beans around the clock."
+cost = 900000
+emoji = "🏭"
+beans_per_hour = 6000
+price_growth = 1.15
+category = "generators"
+
+[[shop.items]]
+name = "taiga_shrine"
+description = "Worshippers leave bean offerings."
+cost = 10000000
+emoji = "🛕"
+beans_per_hour = 60000
+price_growth = 1.15
+category = "generators"
+
+# ───── Consumables ─────
+
+[[shop.items]]
+name = "streak_freeze"
+description = "Automatically saves your streak if you miss a day."
+cost = 150000
+ownership_limit = 2
+emoji = "🧊"
+category = "consumables"
+
+[[shop.items]]
+name = "mystery_box"
+description = "Who knows what's inside? Use /open to find out."
+cost = 25000
+ownership_limit = 5
+emoji = "📦"
+category = "consumables"
+
+# ───── Cosmetics ─────
+# Cosmetics survive prestige and show on /profile.
+
+[[shop.items]]
+name = "flair_ribbon"
+description = "A cute ribbon for your profile."
+cost = 250000
+ownership_limit = 1
+emoji = "🎀"
+category = "cosmetics"
+
+[[shop.items]]
+name = "flair_star"
+description = "A shining star for your profile."
+cost = 500000
+ownership_limit = 1
+emoji = "🌟"
+category = "cosmetics"
+
+[[shop.items]]
+name = "flair_crown"
+description = "Only for true Taiga royalty."
+cost = 1000000
+ownership_limit = 1
+emoji = "👑"
+category = "cosmetics"
 
 [messages]
 fishing = [

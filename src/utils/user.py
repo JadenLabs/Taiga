@@ -11,6 +11,9 @@ DEFAULT_USER = {
     "streak": 0,
     "highestStreak": 0,
     "inventory": {},
+    "goldenBeans": 0,
+    "lastCollect": None,
+    "lastFish": None,
 }
 
 

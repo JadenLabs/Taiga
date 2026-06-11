@@ -11,7 +11,10 @@ from src.core import core, logger
 from src.bot import Bot
 from src.utils.images import resize_and_crop
 from src.utils.user import find_user_or_default
-from src.bot.cogs.shop import get_cooldown_reduction, MIN_COOLDOWN
+from src.bot.cogs.shop import get_cooldown_reduction, get_bean_multiplier, MIN_COOLDOWN
+
+GOLDEN_PET_CHANCE = 0.05
+GOLDEN_PET_MULTIPLIER = 10
 
 ROOT_DIR = os.path.dirname(os.path.abspath("__main__"))
 
@@ -57,7 +60,9 @@ class Pet(Cog):
             # Get user doc
             user_doc: dict = find_user_or_default(ctx.user.id)
             last_pet = user_doc["lastPet"]
+            inventory = user_doc.get("inventory", {})
             continue_streak = False
+            used_streak_freeze = False
 
             if last_pet is not None:
                 # Parse last pet timestamp
@@ -73,7 +78,6 @@ class Pet(Cog):
                 time_now = datetime.now(timezone.utc)
                 last_pet_dif = time_now - time_last_pet
 
-                inventory = user_doc.get("inventory", {})
                 base_cooldown = core.config.data["cooldowns"]["pet"]
                 pet_cooldown = max(base_cooldown - get_cooldown_reduction(inventory), MIN_COOLDOWN)
 
@@ -90,27 +94,46 @@ class Pet(Cog):
 
                 if last_pet_dif.total_seconds() < 86400 or os.getenv("DEV"):
                     continue_streak = True
+                elif (
+                    user_doc.get("streak", 0) > 0
+                    and inventory.get("streak_freeze", 0) >= 1
+                ):
+                    # A streak freeze saves the streak from a missed day
+                    continue_streak = True
+                    used_streak_freeze = True
 
             # Calculate streak before beans so multiplier can use it
             new_pets = user_doc["pets"] + 1
             new_streak = user_doc.get("streak", 0) + 1 if continue_streak else 0
-            multiplier = streak_multiplier(new_streak)
+
+            # Golden pet roll (lucky collar)
+            golden_pet = (
+                inventory.get("lucky_collar", 0) >= 1
+                and random.random() < GOLDEN_PET_CHANCE
+            )
+
+            multiplier = streak_multiplier(new_streak) * get_bean_multiplier(user_doc)
+            if golden_pet:
+                multiplier *= GOLDEN_PET_MULTIPLIER
             new_beans, new_beans_total = calculate_beans(
                 initial=user_doc["beans"], multiplier=multiplier
             )
 
             # Update database
-            database.users.find_one_and_update(
-                {"_id": str(ctx.user.id)},
-                {"$set": {
+            update = {
+                "$set": {
                     "beans": new_beans_total,
                     "pets": new_pets,
                     "lastPet": datetime.now(timezone.utc),
                     "streak": new_streak,
                     "highestStreak": max(new_streak, user_doc.get("highestStreak", 0)),
                     "alarmSent": False,
-                }},
-            )
+                    "streakAlarmSent": False,
+                },
+            }
+            if used_streak_freeze:
+                update["$inc"] = {"inventory.streak_freeze": -1}
+            database.users.find_one_and_update({"_id": str(ctx.user.id)}, update)
 
             # Load, crop, and buffer the image
             taiga_path = get_random_cat()
@@ -123,12 +146,32 @@ class Pet(Cog):
 
             multiplier_str = f" `×{multiplier:.2f}`" if multiplier > 1.01 else ""
             streak_line = f"\nStreak: **{new_streak}**{multiplier_str}!" if new_streak >= 2 else ""
+            golden_line = (
+                f"\n{core.config.data['emojis']['golden_beans']} **GOLDEN PET!** ×{GOLDEN_PET_MULTIPLIER} beans!"
+                if golden_pet
+                else ""
+            )
+            freeze_line = (
+                f"\n🧊 A streak freeze saved your streak! ({inventory.get('streak_freeze', 0) - 1} left)"
+                if used_streak_freeze
+                else ""
+            )
+            title = (
+                f"✨ You pet {core.config.data['bot']['name']}! ✨"
+                if golden_pet
+                else f"You pet {core.config.data['bot']['name']}!"
+            )
             embed = Embed(
-                title=f"You pet {core.config.data['bot']['name']}!",
-                color=core.config.data["colors"]["primary"],
+                title=title,
+                color=(
+                    core.config.data["colors"]["secondary"]
+                    if golden_pet
+                    else core.config.data["colors"]["primary"]
+                ),
                 description=(
                     "Taiga has given you some beans!\n"
-                    f"{core.config.data['emojis']['beans']} `+{new_beans}` beans\n\n"
+                    f"{core.config.data['emojis']['beans']} `+{new_beans}` beans"
+                    f"{golden_line}{freeze_line}\n\n"
                     f"**Stats**\n"
                     f"{core.config.data['emojis']['heart']} Pets `{new_pets}`\n"
                     f"{core.config.data['emojis']['beans']} Beans `{new_beans_total}`"
