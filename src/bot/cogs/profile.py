@@ -10,6 +10,7 @@ from src.bot.cogs.shop import (
     get_effective_cooldown,
     get_collect_cap_hours,
     get_permanent_level,
+    achievement_metrics,
     PERMANENT_UPGRADES,
     ACHIEVEMENTS,
     SHOP_INVENTORY,
@@ -167,6 +168,48 @@ class Profile(Cog):
                 f"{core.config.data['emojis']['streak']} Best streak: `{user_doc.get('highestStreak', 0)}`"
             ),
             inline=False,
+        )
+        await ctx.response.send_message(embed=embed)
+
+    @app_commands.command(name="achievements", description="View your achievements")
+    async def achievements(self, ctx: Interaction, user: User = None):
+        user = user or ctx.user
+        user_doc = find_user_or_default(user.id)
+        unlocked = set(user_doc.get("achievements", []))
+        metrics = achievement_metrics(user_doc)
+        golden_emoji = core.config.data["emojis"]["golden_beans"]
+
+        lines = []
+        hidden_remaining = 0
+        for ach in ACHIEVEMENTS:
+            name = ach["name"].replace("_", " ").title()
+            if ach["name"] in unlocked:
+                reward = ach.get("reward_golden", 0)
+                reward_str = f" · `+{reward}` {golden_emoji}" if reward else ""
+                lines.append(
+                    f"✅ {ach['emoji']} **{name}**\n-# {ach['description']}{reward_str}"
+                )
+            elif ach.get("hidden", False):
+                hidden_remaining += 1
+                lines.append("🔒 **???**\n-# A hidden achievement, waiting to be discovered.")
+            else:
+                current = metrics.get(ach["metric"], 0)
+                shown = min(current, ach["threshold"])
+                lines.append(
+                    f"⬜ {ach['emoji']} **{name}**\n"
+                    f"-# {ach['description']} · `{shown:,}/{ach['threshold']:,}`"
+                )
+
+        total = len(ACHIEVEMENTS)
+        header = f"**{len(unlocked)}/{total}** unlocked"
+        if hidden_remaining:
+            plural = "s" if hidden_remaining != 1 else ""
+            header += f" · 🔒 {hidden_remaining} secret{plural} still hidden"
+
+        embed = Embed(
+            color=core.config.data["colors"]["secondary"],
+            title=f"🏆 {user.display_name}'s Achievements",
+            description=header + "\n\n" + "\n".join(lines),
         )
         await ctx.response.send_message(embed=embed)
 

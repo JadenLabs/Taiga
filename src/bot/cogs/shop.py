@@ -278,19 +278,24 @@ def sync_generator_rate(user_id: int, inventory: dict) -> None:
     )
 
 
-def check_achievements(user_id: int, user_doc: dict | None = None) -> list[dict]:
-    """Unlock any newly-earned achievements, paying golden beans. Returns the
-    list of achievements unlocked by this call (for surfacing to the user)."""
-    user_doc = user_doc or find_user_or_default(user_id)
-    unlocked = set(user_doc.get("achievements", []))
+def achievement_metrics(user_doc: dict) -> dict[str, int]:
+    """Current value of every achievement metric for a user."""
     inventory = user_doc.get("inventory", {})
-    metrics = {
+    return {
         "lifetime_beans": user_doc.get("totalBeansEarned", 0),
         "generators": total_generators_owned(inventory),
         "prestiges": user_doc.get("prestiges", 0),
         "highest_streak": user_doc.get("highestStreak", 0),
         "pets": user_doc.get("pets", 0),
     }
+
+
+def check_achievements(user_id: int, user_doc: dict | None = None) -> list[dict]:
+    """Unlock any newly-earned achievements, paying golden beans. Returns the
+    list of achievements unlocked by this call (for surfacing to the user)."""
+    user_doc = user_doc or find_user_or_default(user_id)
+    unlocked = set(user_doc.get("achievements", []))
+    metrics = achievement_metrics(user_doc)
 
     newly: list[dict] = []
     for ach in ACHIEVEMENTS:

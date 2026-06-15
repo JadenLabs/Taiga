@@ -407,6 +407,7 @@ effect_value = 0.02
 # Unlock once when the metric is reached. Pays golden beans + a tiny permanent
 # bean multiplier (bonus). metric types: lifetime_beans | generators | prestiges
 # | highest_streak | pets
+# hidden = true keeps the details secret in /achievements until it's unlocked.
 
 [[achievements]]
 name = "first_steps"
@@ -434,6 +435,7 @@ metric = "lifetime_beans"
 threshold = 1000000000000
 reward_golden = 5
 bonus = 0.05
+hidden = true
 
 [[achievements]]
 name = "green_thumb"
@@ -470,6 +472,7 @@ metric = "prestiges"
 threshold = 10
 reward_golden = 3
 bonus = 0.05
+hidden = true
 
 [[achievements]]
 name = "devoted"
@@ -479,6 +482,16 @@ metric = "highest_streak"
 threshold = 30
 reward_golden = 2
 bonus = 0.03
+
+[[achievements]]
+name = "cat_whisperer"
+description = "Pet Taiga 500 times."
+emoji = "🐾"
+metric = "pets"
+threshold = 500
+reward_golden = 3
+bonus = 0.04
+hidden = true
 
 [messages]
 fishing = [
