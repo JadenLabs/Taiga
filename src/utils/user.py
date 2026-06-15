@@ -1,3 +1,4 @@
+import copy
 import traceback
 from src.core import core
 from datetime import datetime, timezone, timedelta
@@ -14,6 +15,11 @@ DEFAULT_USER = {
     "goldenBeans": 0,
     "lastCollect": None,
     "lastFish": None,
+    "permanentUpgrades": {},  # golden-bean upgrades, survive prestige
+    "totalBeansEarned": 0,  # lifetime, for prestige payout + achievements
+    "prestiges": 0,
+    "achievements": [],
+    "generatorRate": 0,  # denormalized beans/hr, for the leaderboard
 }
 
 
@@ -23,7 +29,8 @@ def find_user_or_default(id: int | str, default_user: dict = DEFAULT_USER):
         user_doc = database.users.find_one({"_id": id})
         if user_doc is None:
             logger.debug(f"No doc for @{id}, creating")
-            insert_doc = default_user
+            # deepcopy so the shared default's nested dict/list aren't aliased
+            insert_doc = copy.deepcopy(default_user)
             insert_doc["_id"] = id
             database.users.insert_one(insert_doc)
             user_doc = database.users.find_one({"_id": id})

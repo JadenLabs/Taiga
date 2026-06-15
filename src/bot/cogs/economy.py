@@ -7,7 +7,13 @@ from src.core import core
 from src.bot import Bot
 from src.database.database import database
 from src.utils.user import find_user_or_default
-from src.bot.cogs.shop import get_bean_multiplier, get_generator_rate
+from src.bot.cogs.shop import (
+    get_bean_multiplier,
+    get_generator_rate,
+    get_collect_cap_hours,
+    check_achievements,
+    format_unlocks,
+)
 
 
 def parse_ts(value) -> datetime | None:
@@ -53,9 +59,9 @@ class Economy(Cog):
             )
             return await ctx.response.send_message(embed=embed)
 
-        cap_seconds = core.config.data["generators"]["collect_cap_hours"] * 3600
+        cap_hours = get_collect_cap_hours(user_doc)
         elapsed = (now - last_collect).total_seconds()
-        capped = min(elapsed, cap_seconds)
+        capped = elapsed if cap_hours == float("inf") else min(elapsed, cap_hours * 3600)
         multiplier = get_bean_multiplier(user_doc)
         earned = round(rate * (capped / 3600) * multiplier)
 
@@ -68,14 +74,17 @@ class Economy(Cog):
 
         database.users.update_one(
             {"_id": str(ctx.user.id)},
-            {"$inc": {"beans": earned}, "$set": {"lastCollect": now}},
+            {
+                "$inc": {"beans": earned, "totalBeansEarned": earned},
+                "$set": {"lastCollect": now},
+            },
         )
+        unlocked = check_achievements(ctx.user.id)
 
         multiplier_str = f" `×{multiplier:.2f}`" if multiplier > 1.01 else ""
         capped_note = (
-            f"\n-# Storage was full! Generators hold up to "
-            f"{core.config.data['generators']['collect_cap_hours']}hrs of beans."
-            if elapsed > cap_seconds
+            f"\n-# Storage was full! Generators hold up to {cap_hours:g}hrs of beans."
+            if cap_hours != float("inf") and elapsed > cap_hours * 3600
             else ""
         )
         embed = Embed(
@@ -84,7 +93,7 @@ class Economy(Cog):
             description=(
                 f"{beans_emoji} `+{earned:,}` beans{multiplier_str}\n"
                 f"Production: **{rate:,}**/hr"
-                f"{capped_note}"
+                f"{capped_note}{format_unlocks(unlocked)}"
             ),
         )
         await ctx.response.send_message(embed=embed)
@@ -129,8 +138,12 @@ class Economy(Cog):
 
         database.users.update_one(
             {"_id": str(ctx.user.id)},
-            {"$inc": {"beans": earned}, "$set": {"lastFish": now}},
+            {
+                "$inc": {"beans": earned, "totalBeansEarned": earned},
+                "$set": {"lastFish": now},
+            },
         )
+        unlocked = check_achievements(ctx.user.id)
 
         message = random.choice(core.config.data["messages"]["fishing"])
         multiplier_str = f" `×{multiplier:.2f}`" if multiplier > 1.01 else ""
@@ -139,7 +152,7 @@ class Economy(Cog):
             title=f"{fish_emoji} You caught some beans!",
             description=(
                 f"{beans_emoji} `+{earned:,}` beans{multiplier_str}\n"
-                f"-# {message}"
+                f"-# {message}{format_unlocks(unlocked)}"
             ),
         )
         await ctx.response.send_message(embed=embed)

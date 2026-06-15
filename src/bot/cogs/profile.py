@@ -5,12 +5,16 @@ from src.core import core
 from src.bot import Bot
 from src.database.database import database
 from src.bot.cogs.shop import (
-    get_cooldown_reduction,
     get_bean_multiplier,
     get_generator_rate,
+    get_effective_cooldown,
+    get_collect_cap_hours,
+    get_permanent_level,
+    PERMANENT_UPGRADES,
+    ACHIEVEMENTS,
     SHOP_INVENTORY,
-    MIN_COOLDOWN,
 )
+from src.utils.user import find_user_or_default
 
 
 def get_flair(inventory: dict) -> str:
@@ -60,9 +64,7 @@ class Profile(Cog):
             if time_last_pet.tzinfo is None:
                 time_last_pet = time_last_pet.replace(tzinfo=timezone.utc)
 
-            inventory = user_doc.get("inventory", {})
-            base_cooldown = core.config.data["cooldowns"]["pet"]
-            pet_cooldown = max(base_cooldown - get_cooldown_reduction(inventory), MIN_COOLDOWN)
+            pet_cooldown = get_effective_cooldown(user_doc)
             cooldown_over = time_last_pet + timedelta(seconds=pet_cooldown)
             cooldown_over_ts = f"<t:{int(cooldown_over.timestamp())}:R>"
         else:
@@ -85,9 +87,12 @@ class Profile(Cog):
 {core.config.data['emojis']['beans']} Beans: `{user_doc.get("beans", 0)}`
 """
         golden_beans = user_doc.get("goldenBeans", 0)
-        if golden_beans > 0:
-            multiplier = get_bean_multiplier(user_doc)
-            stats += f"{core.config.data['emojis']['golden_beans']} Golden Beans: `{golden_beans}` (×{multiplier:.2f})\n"
+        prestiges = user_doc.get("prestiges", 0)
+        if golden_beans > 0 or prestiges > 0:
+            stats += f"{core.config.data['emojis']['golden_beans']} Golden Beans: `{golden_beans}` · Prestiges: `{prestiges}`\n"
+        multiplier = get_bean_multiplier(user_doc)
+        if multiplier > 1.01:
+            stats += f"✨ Bean Multiplier: `×{multiplier:.2f}`\n"
         rate = get_generator_rate(inventory)
         if rate > 0:
             stats += f"🌱 Production: `{rate:,}`/hr\n"
@@ -104,6 +109,66 @@ class Profile(Cog):
             embed.set_thumbnail(url=user.avatar.url)
 
         await ctx.edit_original_response(embed=embed)
+
+    @app_commands.command(name="stats", description="Your full bean economy dashboard")
+    async def stats(self, ctx: Interaction):
+        user_doc = find_user_or_default(ctx.user.id)
+        inventory = user_doc.get("inventory", {})
+        beans_emoji = core.config.data["emojis"]["beans"]
+        golden_emoji = core.config.data["emojis"]["golden_beans"]
+
+        rate = get_generator_rate(inventory)
+        multiplier = get_bean_multiplier(user_doc)
+        cap = get_collect_cap_hours(user_doc)
+        cap_str = "∞ (Auto-Collect)" if cap == float("inf") else f"{cap:g}hrs"
+        cooldown = get_effective_cooldown(user_doc)
+
+        embed = Embed(
+            color=core.config.data["colors"]["secondary"],
+            title=f"📊 {ctx.user.display_name}'s Dashboard",
+        )
+        embed.add_field(
+            name="Wallet",
+            value=(
+                f"{beans_emoji} Beans: `{user_doc.get('beans', 0):,}`\n"
+                f"{golden_emoji} Golden Beans: `{user_doc.get('goldenBeans', 0):,}`\n"
+                f"📈 Lifetime: `{user_doc.get('totalBeansEarned', 0):,}`"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Production",
+            value=(
+                f"🌱 Generators: `{rate:,}`/hr\n"
+                f"✨ Multiplier: `×{multiplier:.2f}`\n"
+                f"📦 Storage cap: `{cap_str}`\n"
+                f"⏱️ Pet cooldown: `{cooldown / 3600:.1f}hrs`"
+            ),
+            inline=False,
+        )
+
+        owned_upgrades = [
+            f"{u.emoji} {u.fmt_name()} `Lv.{lvl}`"
+            for u in PERMANENT_UPGRADES
+            if (lvl := get_permanent_level(user_doc, u.name)) > 0
+        ]
+        embed.add_field(
+            name="Permanent Upgrades",
+            value="\n".join(owned_upgrades) if owned_upgrades else "None yet — see `/upgrades`",
+            inline=False,
+        )
+
+        unlocked = len(user_doc.get("achievements", []))
+        embed.add_field(
+            name="Progress",
+            value=(
+                f"🐱 Prestiges: `{user_doc.get('prestiges', 0)}`\n"
+                f"🏆 Achievements: `{unlocked}/{len(ACHIEVEMENTS)}`\n"
+                f"{core.config.data['emojis']['streak']} Best streak: `{user_doc.get('highestStreak', 0)}`"
+            ),
+            inline=False,
+        )
+        await ctx.response.send_message(embed=embed)
 
 
 async def setup(bot: Bot):

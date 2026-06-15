@@ -59,12 +59,11 @@ fish = 1800 # 30min
 default_page_size = 10
 
 [prestige]
-base_cost = 1000000 # first golden bean costs 1M beans
-cost_growth = 3     # each subsequent golden bean costs 3x more
-bonus = 0.25        # permanent bean multiplier per golden bean
+base_cost = 1000000 # the scale for the payout curve: floor(sqrt(beans / base_cost)) golden beans
+# The bean multiplier now lives on the golden_paws permanent upgrade (see [[permanent_upgrades]]).
 
 [generators]
-collect_cap_hours = 12 # max hours of income /collect can accrue
+collect_cap_hours = 12 # base hours of income /collect can accrue (extend with Deep Pantry)
 
 # ───── Boosts ─────
 
@@ -175,6 +174,125 @@ beans_per_hour = 60000
 price_growth = 1.15
 category = "generators"
 
+[[shop.items]]
+name = "bean_refinery"
+description = "Refines crude beans into premium toe beans."
+cost = 120000000
+emoji = "🏦"
+beans_per_hour = 500000
+price_growth = 1.15
+category = "generators"
+
+[[shop.items]]
+name = "lunar_bean_base"
+description = "Low gravity, high yield. Beans grow huge up there."
+cost = 1500000000
+emoji = "🌙"
+beans_per_hour = 4000000
+price_growth = 1.15
+category = "generators"
+
+[[shop.items]]
+name = "quantum_reactor"
+description = "Splits beans to release enormous bean energy."
+cost = 20000000000
+emoji = "🌀"
+beans_per_hour = 30000000
+price_growth = 1.15
+category = "generators"
+
+[[shop.items]]
+name = "bean_singularity"
+description = "Reality is mostly beans now."
+cost = 300000000000
+emoji = "🪐"
+beans_per_hour = 250000000
+price_growth = 1.15
+category = "generators"
+
+# ───── Generator Upgrades ─────
+# One-time buys (beans) that boost a specific generator. They unlock once you
+# own `unlock_at` of the target, and reset on prestige with the generators.
+
+[[shop.items]]
+name = "sprout_fertilizer"
+description = "Doubles 🌱 Bean Sprout output."
+cost = 60000
+ownership_limit = 1
+emoji = "💩"
+category = "generator_upgrades"
+target = "bean_sprout"
+output_multiplier = 2.0
+unlock_at = 10
+
+[[shop.items]]
+name = "sprout_greenhouse"
+description = "Doubles 🌱 Bean Sprout output again."
+cost = 800000
+ownership_limit = 1
+emoji = "🏡"
+category = "generator_upgrades"
+target = "bean_sprout"
+output_multiplier = 2.0
+unlock_at = 25
+
+[[shop.items]]
+name = "farm_tractor"
+description = "Doubles 🚜 Bean Farm output."
+cost = 900000
+ownership_limit = 1
+emoji = "🛞"
+category = "generator_upgrades"
+target = "bean_farm"
+output_multiplier = 2.0
+unlock_at = 10
+
+[[shop.items]]
+name = "cannery_automation"
+description = "Doubles 🏭 Bean Cannery output."
+cost = 11000000
+ownership_limit = 1
+emoji = "🦾"
+category = "generator_upgrades"
+target = "bean_cannery"
+output_multiplier = 2.0
+unlock_at = 10
+
+[[shop.items]]
+name = "shrine_devotion"
+description = "Doubles 🛕 Taiga Shrine output."
+cost = 120000000
+ownership_limit = 1
+emoji = "🙏"
+category = "generator_upgrades"
+target = "taiga_shrine"
+output_multiplier = 2.0
+unlock_at = 10
+
+[[shop.items]]
+name = "cat_cafe"
+description = "Synergy: each 🛕 Taiga Shrine makes your 🚜 Bean Farms +3% better."
+cost = 25000000
+ownership_limit = 1
+emoji = "☕"
+category = "generator_upgrades"
+target = "bean_farm"
+synergy_source = "taiga_shrine"
+synergy_per = 0.03
+unlock_at = 5
+
+[[shop.items]]
+name = "bean_ecosystem"
+description = "Synergy: each 🌱 Bean Sprout makes your 🏭 Bean Canneries +0.5% better."
+cost = 80000000
+ownership_limit = 1
+emoji = "🌍"
+category = "generator_upgrades"
+target = "bean_cannery"
+synergy_source = "bean_sprout"
+synergy_per = 0.005
+unlock_at = 5
+
 # ───── Consumables ─────
 
 [[shop.items]]
@@ -219,6 +337,148 @@ cost = 1000000
 ownership_limit = 1
 emoji = "👑"
 category = "cosmetics"
+
+# ───── Permanent Upgrades ─────
+# Bought with golden beans via /upgrades. These survive prestige.
+# effect types: multiplier | collect_cap | cooldown_floor | auto_collect | head_start | lucky
+# cost for a level = round(base_cost * cost_growth ** current_level)
+
+[[permanent_upgrades]]
+name = "golden_paws"
+description = "Taiga's blessing. +25% bean multiplier, forever."
+emoji = "🐾"
+base_cost = 1
+cost_growth = 1.5
+max_level = 0          # 0 = unlimited
+effect = "multiplier"
+effect_value = 0.25
+
+[[permanent_upgrades]]
+name = "deep_pantry"
+description = "Generators store +12hrs of beans before overflowing."
+emoji = "📦"
+base_cost = 2
+cost_growth = 2.0
+max_level = 4
+effect = "collect_cap"
+effect_value = 12     # hours per level
+
+[[permanent_upgrades]]
+name = "eternal_energy"
+description = "Lowers the pet cooldown floor by 10min per level."
+emoji = "⏱️"
+base_cost = 2
+cost_growth = 1.8
+max_level = 5
+effect = "cooldown_floor"
+effect_value = 600    # seconds per level
+
+[[permanent_upgrades]]
+name = "auto_collect"
+description = "Your generators never stop — removes the storage cap entirely."
+emoji = "🤖"
+base_cost = 5
+cost_growth = 1.0
+max_level = 1
+effect = "auto_collect"
+effect_value = 1
+
+[[permanent_upgrades]]
+name = "head_start"
+description = "Keep +5% of your beans through prestige."
+emoji = "🍼"
+base_cost = 1
+cost_growth = 2.0
+max_level = 5
+effect = "head_start"
+effect_value = 0.05   # fraction kept per level
+
+[[permanent_upgrades]]
+name = "lucky_whiskers"
+description = "+2% golden-pet chance and better mystery box odds per level."
+emoji = "🍀"
+base_cost = 2
+cost_growth = 2.0
+max_level = 5
+effect = "lucky"
+effect_value = 0.02
+
+# ───── Achievements ─────
+# Unlock once when the metric is reached. Pays golden beans + a tiny permanent
+# bean multiplier (bonus). metric types: lifetime_beans | generators | prestiges
+# | highest_streak | pets
+
+[[achievements]]
+name = "first_steps"
+description = "Earn 1,000,000 beans (lifetime)."
+emoji = "🌱"
+metric = "lifetime_beans"
+threshold = 1000000
+reward_golden = 1
+bonus = 0.02
+
+[[achievements]]
+name = "bean_baron"
+description = "Earn 1,000,000,000 beans (lifetime)."
+emoji = "💰"
+metric = "lifetime_beans"
+threshold = 1000000000
+reward_golden = 2
+bonus = 0.03
+
+[[achievements]]
+name = "bean_tycoon"
+description = "Earn 1,000,000,000,000 beans (lifetime)."
+emoji = "🏆"
+metric = "lifetime_beans"
+threshold = 1000000000000
+reward_golden = 5
+bonus = 0.05
+
+[[achievements]]
+name = "green_thumb"
+description = "Own 50 generators in total."
+emoji = "🪴"
+metric = "generators"
+threshold = 50
+reward_golden = 1
+bonus = 0.02
+
+[[achievements]]
+name = "bean_empire"
+description = "Own 250 generators in total."
+emoji = "🏭"
+metric = "generators"
+threshold = 250
+reward_golden = 3
+bonus = 0.03
+
+[[achievements]]
+name = "nine_lives"
+description = "Prestige for the first time."
+emoji = "🐱"
+metric = "prestiges"
+threshold = 1
+reward_golden = 1
+bonus = 0.02
+
+[[achievements]]
+name = "reincarnated"
+description = "Prestige 10 times."
+emoji = "😼"
+metric = "prestiges"
+threshold = 10
+reward_golden = 3
+bonus = 0.05
+
+[[achievements]]
+name = "devoted"
+description = "Reach a 30-day streak."
+emoji = "🔥"
+metric = "highest_streak"
+threshold = 30
+reward_golden = 2
+bonus = 0.03
 
 [messages]
 fishing = [

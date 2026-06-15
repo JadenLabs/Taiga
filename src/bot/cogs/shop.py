@@ -15,6 +15,7 @@ SELL_RATE = 0.8
 CATEGORY_ORDER = [
     ("boosts", "Boosts"),
     ("generators", "Generators"),
+    ("generator_upgrades", "Generator Upgrades"),
     ("consumables", "Consumables"),
     ("cosmetics", "Cosmetics"),
 ]
@@ -32,6 +33,18 @@ class Item:
         self.beans_per_hour: int = data.get("beans_per_hour", 0)
         self.price_growth: float = data.get("price_growth", 1.0)
         self.bean_bonus: float = data.get("bean_bonus", 0.0)
+        # Generator-upgrade fields (category == "generator_upgrades")
+        self.target: str = data.get("target", "")
+        self.output_multiplier: float = data.get("output_multiplier", 1.0)
+        self.synergy_source: str = data.get("synergy_source", "")
+        self.synergy_per: float = data.get("synergy_per", 0.0)
+        self.unlock_at: int = data.get("unlock_at", 0)
+
+    def is_unlocked(self, inventory: dict) -> bool:
+        """Generator upgrades unlock once you own enough of their target."""
+        if self.unlock_at <= 0:
+            return True
+        return inventory.get(self.target, 0) >= self.unlock_at
 
     def cost_for(self, owned: int) -> int:
         """Current price given how many the user already owns."""
@@ -58,6 +71,10 @@ class Item:
             notes.append(f"+{self.beans_per_hour:,}/hr each")
         if self.bean_bonus > 0:
             notes.append(f"+{self.bean_bonus:.0%} beans each")
+        if self.output_multiplier > 1.0:
+            notes.append(f"×{self.output_multiplier:g} output")
+        if self.unlock_at > 0:
+            notes.append(f"needs {self.unlock_at}× {self.target.replace('_', ' ')}")
         if self.ownership_limit > 0:
             notes.append(f"owned {owned}/{self.ownership_limit}")
         elif owned > 0:
@@ -86,6 +103,78 @@ SHOP_PAGES: list[tuple[str, list[Item]]] = [
 ]
 
 
+async def item_autocomplete(
+    interaction: Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Filtered item picker — the shop now has more than Discord's 25-choice cap."""
+    cur = current.lower()
+    matches = [
+        i for i in SHOP_INVENTORY
+        if cur in i.fmt_name().lower() or cur in i.name
+    ]
+    return [
+        app_commands.Choice(name=f"{i.emoji} {i.fmt_name()}", value=i.name)
+        for i in matches[:25]
+    ]
+
+
+GENERATORS: list[Item] = [i for i in SHOP_INVENTORY if i.category == "generators"]
+GENERATOR_UPGRADES: list[Item] = [
+    i for i in SHOP_INVENTORY if i.category == "generator_upgrades"
+]
+
+
+class PermanentUpgrade:
+    """A golden-bean upgrade that survives prestige."""
+
+    def __init__(self, data: dict):
+        self.name: str = data["name"]
+        self.description: str = data["description"]
+        self.emoji: str = data.get("emoji", "✨")
+        self.base_cost: int = data["base_cost"]
+        self.cost_growth: float = data.get("cost_growth", 1.0)
+        self.max_level: int = data.get("max_level", 0)  # 0 = unlimited
+        self.effect: str = data["effect"]
+        self.effect_value: float = data.get("effect_value", 0.0)
+
+    def fmt_name(self) -> str:
+        return self.name.replace("_", " ").title()
+
+    def cost_for(self, level: int) -> int:
+        return round(self.base_cost * self.cost_growth**level)
+
+    def at_max(self, level: int) -> bool:
+        return self.max_level > 0 and level >= self.max_level
+
+
+PERMANENT_UPGRADES: list[PermanentUpgrade] = [
+    PermanentUpgrade(data) for data in core.config.data.get("permanent_upgrades", [])
+]
+PERMANENT_MAP: dict[str, PermanentUpgrade] = {u.name: u for u in PERMANENT_UPGRADES}
+
+ACHIEVEMENTS: list[dict] = core.config.data.get("achievements", [])
+
+
+def get_permanent_level(user_doc: dict, name: str) -> int:
+    return user_doc.get("permanentUpgrades", {}).get(name, 0)
+
+
+def _permanent_effect_total(user_doc: dict, effect: str) -> float:
+    """Sum of effect_value × level across permanent upgrades of one effect type."""
+    upgrades = user_doc.get("permanentUpgrades", {})
+    return sum(
+        u.effect_value * upgrades.get(u.name, 0)
+        for u in PERMANENT_UPGRADES
+        if u.effect == effect
+    )
+
+
+def get_achievement_bonus(user_doc: dict) -> float:
+    """Total permanent multiplier fraction from unlocked achievements."""
+    unlocked = set(user_doc.get("achievements", []))
+    return sum(a.get("bonus", 0.0) for a in ACHIEVEMENTS if a["name"] in unlocked)
+
+
 def get_cooldown_reduction(inventory: dict) -> int:
     """Returns total cooldown reduction in seconds from owned items."""
     return sum(
@@ -94,11 +183,48 @@ def get_cooldown_reduction(inventory: dict) -> int:
     )
 
 
+def get_cooldown_floor(user_doc: dict) -> int:
+    """Lowest the pet cooldown can go, lowered by Eternal Energy."""
+    reduction = int(_permanent_effect_total(user_doc, "cooldown_floor"))
+    return max(MIN_COOLDOWN - reduction, 300)  # never below 5 minutes
+
+
+def get_effective_cooldown(user_doc: dict) -> int:
+    """Pet cooldown after shop reductions, clamped to the (upgradable) floor."""
+    base = core.config.data["cooldowns"]["pet"]
+    inventory = user_doc.get("inventory", {})
+    return max(base - get_cooldown_reduction(inventory), get_cooldown_floor(user_doc))
+
+
+def get_collect_cap_hours(user_doc: dict) -> float:
+    """Offline accrual cap; extended by Deep Pantry, removed by Auto-Collect."""
+    if get_permanent_level(user_doc, "auto_collect") > 0:
+        return float("inf")
+    base = core.config.data["generators"]["collect_cap_hours"]
+    return base + _permanent_effect_total(user_doc, "collect_cap")
+
+
+def get_golden_pet_chance(user_doc: dict) -> float:
+    """Base lucky-collar chance plus Lucky Whiskers."""
+    return _permanent_effect_total(user_doc, "lucky")
+
+
+def get_box_luck(user_doc: dict) -> float:
+    """Extra mystery-box fortune from Lucky Whiskers."""
+    return _permanent_effect_total(user_doc, "lucky")
+
+
+def get_head_start_fraction(user_doc: dict) -> float:
+    """Fraction of beans kept through prestige."""
+    return min(_permanent_effect_total(user_doc, "head_start"), 0.95)
+
+
 def get_bean_multiplier(user_doc: dict) -> float:
-    """Global bean multiplier from golden beans (prestige) and bonus items.
+    """Global bean multiplier from Golden Paws, achievements and bonus items.
     Applies to pets, /collect, and /fish."""
-    prestige_bonus = core.config.data["prestige"]["bonus"]
-    multiplier = 1.0 + prestige_bonus * user_doc.get("goldenBeans", 0)
+    paws_bonus = _permanent_effect_total(user_doc, "multiplier")
+    multiplier = 1.0 + paws_bonus
+    multiplier *= 1.0 + get_achievement_bonus(user_doc)
     inventory = user_doc.get("inventory", {})
     for item in SHOP_INVENTORY:
         if item.bean_bonus > 0:
@@ -107,19 +233,94 @@ def get_bean_multiplier(user_doc: dict) -> float:
 
 
 def get_generator_rate(inventory: dict) -> int:
-    """Total passive beans per hour from owned generators."""
-    return sum(
-        inventory.get(item.name, 0) * item.beans_per_hour
-        for item in SHOP_INVENTORY
+    """Total passive beans/hr from generators, after upgrades and synergies."""
+    total = 0.0
+    for gen in GENERATORS:
+        owned = inventory.get(gen.name, 0)
+        if owned == 0:
+            continue
+        factor = 1.0
+        for up in GENERATOR_UPGRADES:
+            if up.target != gen.name or inventory.get(up.name, 0) < 1:
+                continue
+            if up.output_multiplier > 1.0:
+                factor *= up.output_multiplier
+            if up.synergy_per > 0 and up.synergy_source:
+                factor *= 1.0 + up.synergy_per * inventory.get(up.synergy_source, 0)
+        total += owned * gen.beans_per_hour * factor
+    return round(total)
+
+
+def total_generators_owned(inventory: dict) -> int:
+    return sum(inventory.get(g.name, 0) for g in GENERATORS)
+
+
+def sync_generator_rate(user_id: int, inventory: dict) -> None:
+    """Refresh the denormalized generatorRate field used by the leaderboard."""
+    database.users.update_one(
+        {"_id": str(user_id)},
+        {"$set": {"generatorRate": get_generator_rate(inventory)}},
     )
+
+
+def check_achievements(user_id: int, user_doc: dict | None = None) -> list[dict]:
+    """Unlock any newly-earned achievements, paying golden beans. Returns the
+    list of achievements unlocked by this call (for surfacing to the user)."""
+    user_doc = user_doc or find_user_or_default(user_id)
+    unlocked = set(user_doc.get("achievements", []))
+    inventory = user_doc.get("inventory", {})
+    metrics = {
+        "lifetime_beans": user_doc.get("totalBeansEarned", 0),
+        "generators": total_generators_owned(inventory),
+        "prestiges": user_doc.get("prestiges", 0),
+        "highest_streak": user_doc.get("highestStreak", 0),
+        "pets": user_doc.get("pets", 0),
+    }
+
+    newly: list[dict] = []
+    for ach in ACHIEVEMENTS:
+        if ach["name"] in unlocked:
+            continue
+        if metrics.get(ach["metric"], 0) >= ach["threshold"]:
+            # Guard with $nin so concurrent calls can't double-award
+            doc = database.users.find_one_and_update(
+                {"_id": str(user_id), "achievements": {"$nin": [ach["name"]]}},
+                {
+                    "$addToSet": {"achievements": ach["name"]},
+                    "$inc": {"goldenBeans": ach.get("reward_golden", 0)},
+                },
+            )
+            if doc is not None:
+                newly.append(ach)
+    return newly
+
+
+def format_unlocks(newly: list[dict]) -> str:
+    """A line to append to a response embed when achievements are unlocked."""
+    if not newly:
+        return ""
+    golden_emoji = core.config.data["emojis"]["golden_beans"]
+    lines = [
+        f"🏆 **Achievement unlocked: {a['emoji']} {a['name'].replace('_', ' ').title()}**"
+        + (f" `+{a['reward_golden']}` {golden_emoji}" if a.get("reward_golden") else "")
+        for a in newly
+    ]
+    return "\n" + "\n".join(lines)
 
 
 def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | None]:
     """Atomically buys one item at its current scaled price.
     Returns (updated_doc, price_paid, error_message)."""
     user_doc = find_user_or_default(user_id)
-    owned = user_doc.get("inventory", {}).get(item.name, 0)
+    inventory = user_doc.get("inventory", {})
+    owned = inventory.get(item.name, 0)
     price = item.cost_for(owned)
+
+    if not item.is_unlocked(inventory):
+        return None, price, (
+            f"**{item.fmt_name()}** is locked — own "
+            f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
+        )
 
     query = {"_id": str(user_id), "beans": {"$gte": price}}
     if item.ownership_limit > 0:
@@ -140,6 +341,8 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
         query, update, return_document=ReturnDocument.AFTER
     )
     if doc is not None:
+        if item.category in ("generators", "generator_upgrades"):
+            sync_generator_rate(user_id, doc.get("inventory", {}))
         return doc, price, None
 
     user_doc = find_user_or_default(user_id)
@@ -175,7 +378,20 @@ def attempt_sell(user_id: int, item: Item) -> tuple[dict | None, int, str | None
     )
     if doc is None:
         return None, 0, "The shop was busy — try that again."
+    if item.category in ("generators", "generator_upgrades"):
+        sync_generator_rate(user_id, doc.get("inventory", {}))
     return doc, refund, None
+
+
+def visible_page_items(page_items: list[Item], inventory: dict) -> list[Item]:
+    """Hide generator upgrades that are still locked or already owned."""
+    result = []
+    for item in page_items:
+        if item.category == "generator_upgrades":
+            if not item.is_unlocked(inventory) or inventory.get(item.name, 0) >= 1:
+                continue
+        result.append(item)
+    return result
 
 
 def build_shop_embed(user_doc: dict, page: int, action: str | None = None) -> Embed:
@@ -183,11 +399,16 @@ def build_shop_embed(user_doc: dict, page: int, action: str | None = None) -> Em
     beans = user_doc.get("beans", 0)
     beans_emoji = core.config.data["emojis"]["beans"]
     page_title, page_items = SHOP_PAGES[page]
+    shown = visible_page_items(page_items, inventory)
 
-    items = "\n".join(
-        item.fmt_shop_item(owned=inventory.get(item.name, 0))
-        for item in page_items
-    )
+    if shown:
+        items = "\n".join(
+            item.fmt_shop_item(owned=inventory.get(item.name, 0)) for item in shown
+        )
+    elif page_items and page_items[0].category == "generator_upgrades":
+        items = "-# Buy more generators to unlock upgrades for them."
+    else:
+        items = "-# Nothing here right now."
     description = f"{beans_emoji} Your beans: `{beans:,}`\n\n{items}"
     if action:
         description += f"\n\n{action}"
@@ -206,7 +427,7 @@ def build_shop_embed(user_doc: dict, page: int, action: str | None = None) -> Em
 class BuySelect(Select):
     def __init__(self, page_items: list[Item], inventory: dict):
         options = []
-        for item in page_items:
+        for item in visible_page_items(page_items, inventory):
             owned = inventory.get(item.name, 0)
             at_limit = item.ownership_limit > 0 and owned >= item.ownership_limit
             options.append(
@@ -217,7 +438,14 @@ class BuySelect(Select):
                     description="Owned limit reached" if at_limit else item.description[:100],
                 )
             )
-        super().__init__(placeholder="Buy an item...", options=options)
+        if options:
+            super().__init__(placeholder="Buy an item...", options=options[:25])
+        else:
+            super().__init__(
+                placeholder="Nothing to buy here",
+                options=[SelectOption(label="-", value="-")],
+                disabled=True,
+            )
 
     async def callback(self, interaction: Interaction):
         item = ITEM_MAP[self.values[0]]
@@ -280,8 +508,9 @@ def _roll_box(user_id: int) -> tuple[str, int] | tuple[None, None]:
     if doc is None:
         return None, None
 
+    luck = get_box_luck(doc)
     roll = random.random()
-    if roll < 0.10:
+    if roll < 0.10 + luck:
         amount = random.randint(150000, 300000)
         database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
         result = f"💎 **JACKPOT!** {beans_emoji} `+{amount:,}` beans!"
@@ -429,14 +658,15 @@ class Shop(Cog):
 
     @app_commands.command(name="buy", description="Buy an item from the shop")
     @app_commands.describe(item="The item to purchase")
-    @app_commands.choices(
-        item=[
-            app_commands.Choice(name=f"{i.emoji} {i.fmt_name()}", value=i.name)
-            for i in SHOP_INVENTORY
-        ]
-    )
-    async def buy(self, ctx: Interaction, item: app_commands.Choice[str]):
-        shop_item = ITEM_MAP[item.value]
+    @app_commands.autocomplete(item=item_autocomplete)
+    async def buy(self, ctx: Interaction, item: str):
+        shop_item = ITEM_MAP.get(item)
+        if shop_item is None:
+            embed = Embed(
+                color=core.config.data["colors"]["error"],
+                description="That item doesn't exist. Pick one from the list or use `/shop`.",
+            )
+            return await ctx.response.send_message(embed=embed, ephemeral=True)
         doc, price, error = attempt_purchase(ctx.user.id, shop_item)
         if error:
             embed = Embed(color=core.config.data["colors"]["error"], description=error)
@@ -461,14 +691,15 @@ class Shop(Cog):
 
     @app_commands.command(name="sell", description="Sell an item back for 80% of what you paid")
     @app_commands.describe(item="The item to sell")
-    @app_commands.choices(
-        item=[
-            app_commands.Choice(name=f"{i.emoji} {i.fmt_name()}", value=i.name)
-            for i in SHOP_INVENTORY
-        ]
-    )
-    async def sell(self, ctx: Interaction, item: app_commands.Choice[str]):
-        shop_item = ITEM_MAP[item.value]
+    @app_commands.autocomplete(item=item_autocomplete)
+    async def sell(self, ctx: Interaction, item: str):
+        shop_item = ITEM_MAP.get(item)
+        if shop_item is None:
+            embed = Embed(
+                color=core.config.data["colors"]["error"],
+                description="That item doesn't exist. Pick one from the list or use `/shop`.",
+            )
+            return await ctx.response.send_message(embed=embed, ephemeral=True)
         doc, refund, error = attempt_sell(ctx.user.id, shop_item)
         if error:
             embed = Embed(color=core.config.data["colors"]["error"], description=error)
@@ -515,9 +746,8 @@ class Shop(Cog):
             if (count := inventory.get(item.name, 0)) > 0
         ]
 
-        base_cooldown = core.config.data["cooldowns"]["pet"]
         reduction = get_cooldown_reduction(inventory)
-        effective = max(base_cooldown - reduction, MIN_COOLDOWN)
+        effective = get_effective_cooldown(user_doc)
 
         embed = Embed(
             color=core.config.data["colors"]["primary"],

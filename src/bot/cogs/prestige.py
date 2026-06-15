@@ -1,3 +1,4 @@
+import math
 from discord import app_commands, Interaction, Embed, ButtonStyle
 from discord.ext.commands import Cog
 from discord.ui import View, Button
@@ -6,12 +7,24 @@ from src.core import core
 from src.bot import Bot
 from src.database.database import database
 from src.utils.user import find_user_or_default
-from src.bot.cogs.shop import SHOP_INVENTORY, get_bean_multiplier
+from src.bot.cogs.shop import (
+    SHOP_INVENTORY,
+    get_bean_multiplier,
+    get_head_start_fraction,
+    check_achievements,
+    format_unlocks,
+)
 
 
-def next_prestige_cost(golden_beans: int) -> int:
-    cfg = core.config.data["prestige"]
-    return round(cfg["base_cost"] * cfg["cost_growth"] ** golden_beans)
+def prestige_payout(beans: int) -> int:
+    """Golden beans earned for prestiging with `beans` banked.
+    floor(sqrt(beans / base_cost)) — diminishing returns, so hoarding before
+    prestiging pays off but each bean is worth steadily less."""
+    base_cost = core.config.data["prestige"]["base_cost"]
+    if beans < base_cost:
+        return 0
+    # isqrt stays exact for very large bean counts (no float rounding)
+    return math.isqrt(beans // base_cost)
 
 
 def kept_cosmetics(inventory: dict) -> dict:
@@ -24,11 +37,9 @@ def kept_cosmetics(inventory: dict) -> dict:
 
 
 class PrestigeConfirmView(View):
-    def __init__(self, user_id: int, golden_beans: int, cost: int):
+    def __init__(self, user_id: int):
         super().__init__(timeout=60)
         self.user_id = user_id
-        self.golden_beans = golden_beans
-        self.cost = cost
         self.message = None
 
         button = Button(label="Use a life — prestige!", style=ButtonStyle.danger, emoji="🐱")
@@ -47,47 +58,60 @@ class PrestigeConfirmView(View):
 
     async def confirm(self, interaction: Interaction):
         user_doc = find_user_or_default(self.user_id)
-        cosmetics = kept_cosmetics(user_doc.get("inventory", {}))
+        beans = user_doc.get("beans", 0)
+        payout = prestige_payout(beans)
+        if payout < 1:
+            embed = Embed(
+                color=core.config.data["colors"]["error"],
+                description="You no longer have enough beans to prestige. Run `/prestige` again.",
+            )
+            return await interaction.response.edit_message(embed=embed, view=None)
 
-        # Guard on beans and goldenBeans so a double-click can't prestige twice
-        query = {
-            "_id": str(self.user_id),
-            "beans": {"$gte": self.cost},
-            "goldenBeans": {"$in": [self.golden_beans, None]}
-            if self.golden_beans == 0
-            else self.golden_beans,
-        }
+        cosmetics = kept_cosmetics(user_doc.get("inventory", {}))
+        kept_beans = int(beans * get_head_start_fraction(user_doc))
+
+        # Guard on the exact bean balance so a double-click can't prestige twice
         doc = database.users.find_one_and_update(
-            query,
+            {"_id": str(self.user_id), "beans": beans},
             {
                 "$set": {
-                    "beans": 0,
+                    "beans": kept_beans,
                     "inventory": cosmetics,
                     "lastCollect": None,
+                    "generatorRate": 0,
                 },
-                "$inc": {"goldenBeans": 1},
+                "$inc": {"goldenBeans": payout, "prestiges": 1},
             },
             return_document=ReturnDocument.AFTER,
         )
         if doc is None:
             embed = Embed(
                 color=core.config.data["colors"]["error"],
-                description="Prestige failed — your beans or golden beans changed. Run `/prestige` again.",
+                description="Prestige failed — your beans changed. Run `/prestige` again.",
             )
             return await interaction.response.edit_message(embed=embed, view=None)
 
         self.stop()
+        unlocked = check_achievements(self.user_id)
         golden_emoji = core.config.data["emojis"]["golden_beans"]
-        new_golden = doc.get("goldenBeans", 0)
+        beans_emoji = core.config.data["emojis"]["beans"]
         multiplier = get_bean_multiplier(doc)
+        kept_line = (
+            f"\n{beans_emoji} Head Start kept `{kept_beans:,}` beans"
+            if kept_beans > 0
+            else ""
+        )
         embed = Embed(
             color=core.config.data["colors"]["secondary"],
             title="🐱 A new life begins!",
             description=(
-                f"{core.config.data['bot']['name']} grants you a golden bean.\n\n"
-                f"{golden_emoji} Golden beans: **{new_golden}**\n"
-                f"✨ Permanent bean multiplier: **×{multiplier:.2f}**\n\n"
-                f"-# Your beans and items were reset. Cosmetics, pets, and streaks were kept."
+                f"{core.config.data['bot']['name']} grants you {golden_emoji} **+{payout}** golden beans.\n\n"
+                f"{golden_emoji} Golden beans: **{doc.get('goldenBeans', 0)}**\n"
+                f"✨ Current multiplier: **×{multiplier:.2f}**"
+                f"{kept_line}\n\n"
+                f"-# Spend golden beans on permanent upgrades with `/upgrades`.\n"
+                f"-# Your beans and items were reset. Cosmetics, pets, streaks, and upgrades were kept."
+                f"{format_unlocks(unlocked)}"
             ),
         )
         await interaction.response.edit_message(embed=embed, view=None)
@@ -110,35 +134,36 @@ class Prestige(Cog):
 
     @app_commands.command(
         name="prestige",
-        description="Spend one of Taiga's nine lives for a permanent bean multiplier",
+        description="Spend one of Taiga's nine lives to convert your beans into golden beans",
     )
     async def prestige(self, ctx: Interaction):
         user_doc = find_user_or_default(ctx.user.id)
-        golden_beans = user_doc.get("goldenBeans", 0)
         beans = user_doc.get("beans", 0)
-        cost = next_prestige_cost(golden_beans)
-        bonus = core.config.data["prestige"]["bonus"]
+        golden_beans = user_doc.get("goldenBeans", 0)
+        base_cost = core.config.data["prestige"]["base_cost"]
+        payout = prestige_payout(beans)
 
         beans_emoji = core.config.data["emojis"]["beans"]
         golden_emoji = core.config.data["emojis"]["golden_beans"]
         multiplier = get_bean_multiplier(user_doc)
 
         description = (
-            f"Trade everything for a {golden_emoji} **golden bean** — "
-            f"a permanent **+{bonus:.0%}** bean multiplier.\n\n"
+            f"Trade your beans for {golden_emoji} **golden beans** — the prestige "
+            f"currency you spend on permanent upgrades in `/upgrades`.\n\n"
             f"{golden_emoji} Golden beans: **{golden_beans}** (×{multiplier:.2f} multiplier)\n"
-            f"{beans_emoji} Next golden bean costs: `{cost:,}` beans\n"
-            f"{beans_emoji} You have: `{beans:,}` beans\n\n"
-            f"**Resets:** beans, all items (except cosmetics)\n"
-            f"**Keeps:** pets, streaks, cosmetics, golden beans"
+            f"{beans_emoji} You have: `{beans:,}` beans\n"
+            f"{golden_emoji} Prestiging now earns: **+{payout}**\n\n"
+            f"**Resets:** beans, generators, and all bean-bought items\n"
+            f"**Keeps:** pets, streaks, cosmetics, golden beans, permanent upgrades"
         )
 
-        if beans < cost:
+        if payout < 1:
+            needed = base_cost - beans
             embed = Embed(
                 color=core.config.data["colors"]["primary"],
                 title="🐱 Nine Lives",
                 description=description
-                + f"\n\nYou need `{cost - beans:,}` more beans to prestige.",
+                + f"\n\nYou need `{needed:,}` more beans to earn your first golden bean.",
             )
             return await ctx.response.send_message(embed=embed)
 
@@ -147,7 +172,7 @@ class Prestige(Cog):
             title="🐱 Nine Lives — ready!",
             description=description + "\n\n**This cannot be undone.**",
         )
-        view = PrestigeConfirmView(ctx.user.id, golden_beans, cost)
+        view = PrestigeConfirmView(ctx.user.id)
         await ctx.response.send_message(embed=embed, view=view)
         view.message = await ctx.original_response()
 

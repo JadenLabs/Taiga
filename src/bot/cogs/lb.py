@@ -85,6 +85,34 @@ class Leaderboards(GroupCog, name="lb", description="Leaderboard commands"):
             print_exc()
             logger.error("An error has occurred:", e)
 
+    @app_commands.command(name="production", description="Shows the beans-per-hour (generators) leaderboard!")
+    async def production(self, ctx: Interaction, page: int = 1):
+        """Shows the generator production (beans/hr) leaderboard!
+
+        Args:
+            ctx (Interaction): The command interaction.
+            page (int, optional): The page of the leaderboard to view. Defaults to 1.
+        """
+        try:
+            await self.send_leaderboard(ctx, page, "generatorRate", "Generator")
+        except Exception as e:
+            print_exc()
+            logger.error("An error has occurred:", e)
+
+    @app_commands.command(name="prestiges", description="Shows the prestige (Nine Lives) leaderboard!")
+    async def prestiges(self, ctx: Interaction, page: int = 1):
+        """Shows the prestige count leaderboard!
+
+        Args:
+            ctx (Interaction): The command interaction.
+            page (int, optional): The page of the leaderboard to view. Defaults to 1.
+        """
+        try:
+            await self.send_leaderboard(ctx, page, "prestiges", "Prestige")
+        except Exception as e:
+            print_exc()
+            logger.error("An error has occurred:", e)
+
     async def send_leaderboard(self, ctx: Interaction, page: int, field: str, field_display: str = None):
         if not ctx.response.is_done():
             await ctx.response.defer()

@@ -11,7 +11,13 @@ from src.core import core, logger
 from src.bot import Bot
 from src.utils.images import resize_and_crop
 from src.utils.user import find_user_or_default
-from src.bot.cogs.shop import get_cooldown_reduction, get_bean_multiplier, MIN_COOLDOWN
+from src.bot.cogs.shop import (
+    get_bean_multiplier,
+    get_effective_cooldown,
+    get_golden_pet_chance,
+    check_achievements,
+    format_unlocks,
+)
 
 GOLDEN_PET_CHANCE = 0.05
 GOLDEN_PET_MULTIPLIER = 10
@@ -78,8 +84,7 @@ class Pet(Cog):
                 time_now = datetime.now(timezone.utc)
                 last_pet_dif = time_now - time_last_pet
 
-                base_cooldown = core.config.data["cooldowns"]["pet"]
-                pet_cooldown = max(base_cooldown - get_cooldown_reduction(inventory), MIN_COOLDOWN)
+                pet_cooldown = get_effective_cooldown(user_doc)
 
                 if not os.getenv("DEV"):
                     if last_pet_dif.total_seconds() < pet_cooldown:
@@ -106,11 +111,12 @@ class Pet(Cog):
             new_pets = user_doc["pets"] + 1
             new_streak = user_doc.get("streak", 0) + 1 if continue_streak else 0
 
-            # Golden pet roll (lucky collar)
-            golden_pet = (
-                inventory.get("lucky_collar", 0) >= 1
-                and random.random() < GOLDEN_PET_CHANCE
-            )
+            # Golden pet roll: lucky collar grants the base chance, Lucky
+            # Whiskers (permanent upgrade) adds on top and works on its own.
+            golden_chance = get_golden_pet_chance(user_doc)
+            if inventory.get("lucky_collar", 0) >= 1:
+                golden_chance += GOLDEN_PET_CHANCE
+            golden_pet = golden_chance > 0 and random.random() < golden_chance
 
             multiplier = streak_multiplier(new_streak) * get_bean_multiplier(user_doc)
             if golden_pet:
@@ -131,9 +137,14 @@ class Pet(Cog):
                     "streakAlarmSent": False,
                 },
             }
+            inc = {"totalBeansEarned": new_beans}
             if used_streak_freeze:
-                update["$inc"] = {"inventory.streak_freeze": -1}
+                inc["inventory.streak_freeze"] = -1
+            update["$inc"] = inc
             database.users.find_one_and_update({"_id": str(ctx.user.id)}, update)
+
+            # Unlock any achievements crossed by this pet (pets/streak/lifetime)
+            unlocked = check_achievements(ctx.user.id)
 
             # Load, crop, and buffer the image
             taiga_path = get_random_cat()
@@ -176,6 +187,7 @@ class Pet(Cog):
                     f"{core.config.data['emojis']['heart']} Pets `{new_pets}`\n"
                     f"{core.config.data['emojis']['beans']} Beans `{new_beans_total}`"
                     + streak_line
+                    + format_unlocks(unlocked)
                 ),
             )
             embed.set_image(url="attachment://el_gato.png")

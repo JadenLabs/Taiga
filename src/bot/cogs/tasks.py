@@ -7,11 +7,12 @@ import discord
 from src.bot import Bot
 from src.core import core, logger
 from src.database.database import database
-from src.bot.cogs.shop import get_cooldown_reduction, MIN_COOLDOWN
+from src.bot.cogs.shop import get_effective_cooldown
 
 
 STREAK_WINDOW = 86400  # streak expires 24h after last pet
 STREAK_WARNING = 7200  # streak_alarm warns 2h before expiry
+EARLIEST_READY = 300  # lowest the cooldown floor can ever reach (Eternal Energy)
 
 
 class Tasks(Cog):
@@ -30,15 +31,11 @@ class Tasks(Cog):
         try:
             cursor = database.users.find({
                 "inventory.alarm_clock": {"$gte": 1},
-                "lastPet": {"$ne": None, "$lte": now - timedelta(seconds=MIN_COOLDOWN)},
+                "lastPet": {"$ne": None, "$lte": now - timedelta(seconds=EARLIEST_READY)},
                 "alarmSent": {"$ne": True},
             })
             for user_doc in cursor:
-                inventory = user_doc.get("inventory", {})
-                base_cooldown = core.config.data["cooldowns"]["pet"]
-                effective_cooldown = max(
-                    base_cooldown - get_cooldown_reduction(inventory), MIN_COOLDOWN
-                )
+                effective_cooldown = get_effective_cooldown(user_doc)
 
                 last_pet = user_doc["lastPet"]
                 if isinstance(last_pet, str):
