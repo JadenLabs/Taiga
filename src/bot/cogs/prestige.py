@@ -18,7 +18,7 @@ from src.bot.cogs.shop import (
 
 def prestige_payout(beans: int) -> int:
     """Golden beans earned for prestiging with `beans` banked.
-    floor(sqrt(beans / base_cost)) — diminishing returns, so hoarding before
+    floor(sqrt(beans / base_cost)) - diminishing returns, so hoarding before
     prestiging pays off but each bean is worth steadily less."""
     base_cost = core.config.data["prestige"]["base_cost"]
     if beans < base_cost:
@@ -42,7 +42,9 @@ class PrestigeConfirmView(View):
         self.user_id = user_id
         self.message = None
 
-        button = Button(label="Use a life — prestige!", style=ButtonStyle.danger, emoji="🐱")
+        button = Button(
+            label="Use a life - prestige!", style=ButtonStyle.danger, emoji="🐱"
+        )
         button.callback = self.confirm
         self.add_item(button)
 
@@ -87,7 +89,7 @@ class PrestigeConfirmView(View):
         if doc is None:
             embed = Embed(
                 color=core.config.data["colors"]["error"],
-                description="Prestige failed — your beans changed. Run `/prestige` again.",
+                description="Prestige failed - your beans changed. Run `/prestige` again.",
             )
             return await interaction.response.edit_message(embed=embed, view=None)
 
@@ -148,7 +150,7 @@ class Prestige(Cog):
         multiplier = get_bean_multiplier(user_doc)
 
         description = (
-            f"Trade your beans for {golden_emoji} **golden beans** — the prestige "
+            f"Trade your beans for {golden_emoji} **golden beans** - the prestige "
             f"currency you spend on permanent upgrades in `/upgrades`.\n\n"
             f"{golden_emoji} Golden beans: **{golden_beans}** (×{multiplier:.2f} multiplier)\n"
             f"{beans_emoji} You have: `{beans:,}` beans\n"
@@ -169,7 +171,7 @@ class Prestige(Cog):
 
         embed = Embed(
             color=core.config.data["colors"]["secondary"],
-            title="🐱 Nine Lives — ready!",
+            title="🐱 Nine Lives - ready!",
             description=description + "\n\n**This cannot be undone.**",
         )
         view = PrestigeConfirmView(ctx.user.id)

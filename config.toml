@@ -130,7 +130,7 @@ category = "boosts"
 
 [[shop.items]]
 name = "fishing_rod"
-description = "Unlocks /fish — catch beans every 30 minutes."
+description = "Unlocks /fish - catch beans every 30 minutes."
 cost = 75000
 ownership_limit = 1
 emoji = "🎣"
@@ -313,7 +313,7 @@ category = "consumables"
 
 [[shop.items]]
 name = "box_opener"
-description = "Adds an Open All button — open every box of a type at once."
+description = "Adds an Open All button - open every box of a type at once."
 cost = 200000
 ownership_limit = 1
 emoji = "🔓"
@@ -391,7 +391,7 @@ effect_value = 600    # seconds per level
 
 [[permanent_upgrades]]
 name = "auto_collect"
-description = "Your generators never stop — removes the storage cap entirely."
+description = "Your generators never stop - removes the storage cap entirely."
 emoji = "🤖"
 base_cost = 5
 cost_growth = 1.0
@@ -513,9 +513,9 @@ hidden = true
 # Each box item (matched by name) has an ordered list of reward tiers.
 #   weight       relative chance (the weights for a box should sum to 1.0)
 #   type         "beans" | "golden" | "item"
-#   multiplied   beans tiers only — run the payout through the bean multiplier
-#   pool         item tiers only — which shop categories to draw a prize from
-#   fallback_*   item tiers only — beans range if no eligible prize exists
+#   multiplied   beans tiers only - run the payout through the bean multiplier
+#   pool         item tiers only - which shop categories to draw a prize from
+#   fallback_*   item tiers only - beans range if no eligible prize exists
 #   luck_target  Lucky Whiskers adds its % to this tier's weight
 #   luck_donor   Lucky Whiskers subtracts its % from this tier's weight
 #   label        optional flourish prefixed to the result line

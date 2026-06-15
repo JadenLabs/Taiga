@@ -32,7 +32,9 @@ class Economy(Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @app_commands.command(name="collect", description="Collect beans from your generators")
+    @app_commands.command(
+        name="collect", description="Collect beans from your generators"
+    )
     async def collect(self, ctx: Interaction):
         user_doc = find_user_or_default(ctx.user.id)
         inventory = user_doc.get("inventory", {})
@@ -49,7 +51,7 @@ class Economy(Cog):
         now = datetime.now(timezone.utc)
         last_collect = parse_ts(user_doc.get("lastCollect"))
         if last_collect is None:
-            # Generators owned before lastCollect existed — start the clock now
+            # Generators owned before lastCollect existed - start the clock now
             database.users.update_one(
                 {"_id": str(ctx.user.id)}, {"$set": {"lastCollect": now}}
             )
@@ -61,14 +63,16 @@ class Economy(Cog):
 
         cap_hours = get_collect_cap_hours(user_doc)
         elapsed = (now - last_collect).total_seconds()
-        capped = elapsed if cap_hours == float("inf") else min(elapsed, cap_hours * 3600)
+        capped = (
+            elapsed if cap_hours == float("inf") else min(elapsed, cap_hours * 3600)
+        )
         multiplier = get_bean_multiplier(user_doc)
         earned = round(rate * (capped / 3600) * multiplier)
 
         if earned < 1:
             embed = Embed(
                 color=core.config.data["colors"]["error"],
-                description="Nothing to collect yet — your generators need a little more time.",
+                description="Nothing to collect yet - your generators need a little more time.",
             )
             return await ctx.response.send_message(embed=embed, ephemeral=True)
 
@@ -98,7 +102,9 @@ class Economy(Cog):
         )
         await ctx.response.send_message(embed=embed)
 
-    @app_commands.command(name="fish", description="Go fishing for beans (requires a fishing rod)")
+    @app_commands.command(
+        name="fish", description="Go fishing for beans (requires a fishing rod)"
+    )
     async def fish(self, ctx: Interaction):
         user_doc = find_user_or_default(ctx.user.id)
         inventory = user_doc.get("inventory", {})

@@ -155,7 +155,11 @@ class Profile(Cog):
         ]
         embed.add_field(
             name="Permanent Upgrades",
-            value="\n".join(owned_upgrades) if owned_upgrades else "None yet — see `/upgrades`",
+            value=(
+                "\n".join(owned_upgrades)
+                if owned_upgrades
+                else "None yet - see `/upgrades`"
+            ),
             inline=False,
         )
 
@@ -191,7 +195,9 @@ class Profile(Cog):
                 )
             elif ach.get("hidden", False):
                 hidden_remaining += 1
-                lines.append("🔒 **???**\n-# A hidden achievement, waiting to be discovered.")
+                lines.append(
+                    "🔒 **???**\n-# A hidden achievement, waiting to be discovered."
+                )
             else:
                 current = metrics.get(ach["metric"], 0)
                 shown = min(current, ach["threshold"])

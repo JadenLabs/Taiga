@@ -36,7 +36,7 @@ def get_random_cat():
 
 def streak_multiplier(streak: int) -> float:
     """Quadratic streak multiplier capped at 40×.
-    M(n) = 1 + n*(n-1)/76 — designed so 20 consecutive pets total ~50,000 beans."""
+    M(n) = 1 + n*(n-1)/76 - designed so 20 consecutive pets total ~50,000 beans."""
     return min(1.0 + (streak * (streak - 1)) / 76.0, 40.0)
 
 
@@ -156,7 +156,11 @@ class Pet(Cog):
             taiga_file = File(fp=buffer, filename="el_gato.png")
 
             multiplier_str = f" `×{multiplier:.2f}`" if multiplier > 1.01 else ""
-            streak_line = f"\nStreak: **{new_streak}**{multiplier_str}!" if new_streak >= 2 else ""
+            streak_line = (
+                f"\nStreak: **{new_streak}**{multiplier_str}!"
+                if new_streak >= 2
+                else ""
+            )
             golden_line = (
                 f"\n{core.config.data['emojis']['golden_beans']} **GOLDEN PET!** ×{GOLDEN_PET_MULTIPLIER} beans!"
                 if golden_pet

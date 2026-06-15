@@ -40,7 +40,7 @@ def fmt_upgrade(upgrade: PermanentUpgrade, level: int) -> str:
     else:
         price_str = f"`{upgrade.cost_for(level):,}` {golden_emoji}"
     return (
-        f"{upgrade.emoji} **{upgrade.fmt_name()}** — {price_str} · `{lvl_str}`\n"
+        f"{upgrade.emoji} **{upgrade.fmt_name()}** - {price_str} · `{lvl_str}`\n"
         f"-# {upgrade.description} · {effect_summary(upgrade)}"
     )
 
@@ -61,7 +61,9 @@ def attempt_buy_upgrade(
         "_id": str(user_id),
         "goldenBeans": {"$gte": cost},
         # Level must be unchanged so the price we charge matches what we read
-        f"permanentUpgrades.{upgrade.name}": level if level > 0 else {"$not": {"$gte": 1}},
+        f"permanentUpgrades.{upgrade.name}": (
+            level if level > 0 else {"$not": {"$gte": 1}}
+        ),
     }
     doc = database.users.find_one_and_update(
         query,
@@ -78,18 +80,23 @@ def attempt_buy_upgrade(
 
     user_doc = find_user_or_default(user_id)
     if user_doc.get("goldenBeans", 0) < cost:
-        return None, cost, (
-            f"Not enough golden beans. You need {golden_emoji} `{cost:,}` "
-            f"but only have `{user_doc.get('goldenBeans', 0):,}`. Earn more with `/prestige`."
+        return (
+            None,
+            cost,
+            (
+                f"Not enough golden beans. You need {golden_emoji} `{cost:,}` "
+                f"but only have `{user_doc.get('goldenBeans', 0):,}`. Earn more with `/prestige`."
+            ),
         )
-    return None, cost, "Something changed — try that again."
+    return None, cost, "Something changed - try that again."
 
 
 def build_upgrades_embed(user_doc: dict, action: str | None = None) -> Embed:
     golden_emoji = core.config.data["emojis"]["golden_beans"]
     golden = user_doc.get("goldenBeans", 0)
     lines = "\n".join(
-        fmt_upgrade(u, get_permanent_level(user_doc, u.name)) for u in PERMANENT_UPGRADES
+        fmt_upgrade(u, get_permanent_level(user_doc, u.name))
+        for u in PERMANENT_UPGRADES
     )
     description = f"{golden_emoji} Your golden beans: `{golden:,}`\n\n{lines}"
     if action:
@@ -109,7 +116,7 @@ class UpgradeSelect(Select):
         for u in PERMANENT_UPGRADES:
             level = get_permanent_level(user_doc, u.name)
             maxed = u.at_max(level)
-            label = f"{u.fmt_name()} — " + (
+            label = f"{u.fmt_name()} - " + (
                 "MAXED" if maxed else f"{u.cost_for(level):,} golden"
             )
             options.append(
@@ -150,7 +157,9 @@ class UpgradesView(View):
             return False
         return True
 
-    async def refresh(self, interaction: Interaction, user_doc: dict, action: str | None):
+    async def refresh(
+        self, interaction: Interaction, user_doc: dict, action: str | None
+    ):
         new_view = UpgradesView(self.user_id, user_doc)
         new_view.message = self.message
         self.stop()
@@ -174,7 +183,9 @@ class Upgrades(Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @app_commands.command(name="upgrades", description="Spend golden beans on permanent upgrades")
+    @app_commands.command(
+        name="upgrades", description="Spend golden beans on permanent upgrades"
+    )
     async def upgrades(self, ctx: Interaction):
         user_doc = find_user_or_default(ctx.user.id)
         view = UpgradesView(ctx.user.id, user_doc)

@@ -53,7 +53,7 @@ class Item:
         return self.cost
 
     def sell_value_for(self, owned: int) -> int:
-        """Refund for selling one item while owning `owned` of them —
+        """Refund for selling one item while owning `owned` of them -
         SELL_RATE of the price that was paid for the most recent one."""
         return int(self.cost_for(max(owned - 1, 0)) * SELL_RATE)
 
@@ -75,7 +75,9 @@ class Item:
         if self.cooldown_reduction > 0:
             mins = self.cooldown_reduction // 60
             notes.append(
-                f"−{mins}min cooldown each" if self.ownership_limit != 1 else f"−{mins}min cooldown"
+                f"−{mins}min cooldown each"
+                if self.ownership_limit != 1
+                else f"−{mins}min cooldown"
             )
         if self.beans_per_hour > 0:
             notes.append(f"+{self.beans_per_hour:,}/hr each")
@@ -101,14 +103,12 @@ class Item:
             if self.price_growth > 1.0 and owned > 0:
                 price_str += " (next)"
         return (
-            f"{self.emoji} **{self.fmt_name()}** — {price_str}\n"
+            f"{self.emoji} **{self.fmt_name()}** - {price_str}\n"
             f"-# {self.description}" + (f" · {subtext}" if subtext else "")
         )
 
 
-SHOP_INVENTORY: list[Item] = [
-    Item(data) for data in core.config.data["shop"]["items"]
-]
+SHOP_INVENTORY: list[Item] = [Item(data) for data in core.config.data["shop"]["items"]]
 
 ITEM_MAP: dict[str, Item] = {item.name: item for item in SHOP_INVENTORY}
 
@@ -122,11 +122,10 @@ SHOP_PAGES: list[tuple[str, list[Item]]] = [
 async def item_autocomplete(
     interaction: Interaction, current: str
 ) -> list[app_commands.Choice[str]]:
-    """Filtered item picker — the shop now has more than Discord's 25-choice cap."""
+    """Filtered item picker - the shop now has more than Discord's 25-choice cap."""
     cur = current.lower()
     matches = [
-        i for i in SHOP_INVENTORY
-        if cur in i.fmt_name().lower() or cur in i.name
+        i for i in SHOP_INVENTORY if cur in i.fmt_name().lower() or cur in i.name
     ]
     return [
         app_commands.Choice(name=f"{i.emoji} {i.fmt_name()}", value=i.name)
@@ -137,10 +136,11 @@ async def item_autocomplete(
 async def sellable_autocomplete(
     interaction: Interaction, current: str
 ) -> list[app_commands.Choice[str]]:
-    """Item picker for /sell — cosmetics are excluded since they can't be sold."""
+    """Item picker for /sell - cosmetics are excluded since they can't be sold."""
     cur = current.lower()
     matches = [
-        i for i in SHOP_INVENTORY
+        i
+        for i in SHOP_INVENTORY
         if i.category != "cosmetics" and (cur in i.fmt_name().lower() or cur in i.name)
     ]
     return [
@@ -214,8 +214,7 @@ def get_achievement_bonus(user_doc: dict) -> float:
 def get_cooldown_reduction(inventory: dict) -> int:
     """Returns total cooldown reduction in seconds from owned items."""
     return sum(
-        inventory.get(item.name, 0) * item.cooldown_reduction
-        for item in SHOP_INVENTORY
+        inventory.get(item.name, 0) * item.cooldown_reduction for item in SHOP_INVENTORY
     )
 
 
@@ -358,9 +357,13 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
     price = item.cost_for(owned)
 
     if not item.is_unlocked(inventory):
-        return None, price, (
-            f"**{item.fmt_name()}** is locked — own "
-            f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
+        return (
+            None,
+            price,
+            (
+                f"**{item.fmt_name()}** is locked - own "
+                f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
+            ),
         )
 
     query = {"_id": str(user_id), "beans": {"$gte": price}}
@@ -369,9 +372,7 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
         query[f"inventory.{item.name}"] = {"$not": {"$gte": item.ownership_limit}}
     if item.price_growth > 1.0:
         # Price depends on the owned count, so require it to be unchanged
-        query[f"inventory.{item.name}"] = (
-            owned if owned > 0 else {"$not": {"$gte": 1}}
-        )
+        query[f"inventory.{item.name}"] = owned if owned > 0 else {"$not": {"$gte": 1}}
 
     update = {"$inc": {f"inventory.{item.name}": 1, "beans": -price}}
     if item.beans_per_hour > 0 and user_doc.get("lastCollect") is None:
@@ -389,17 +390,25 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
     user_doc = find_user_or_default(user_id)
     owned = user_doc.get("inventory", {}).get(item.name, 0)
     if item.ownership_limit > 0 and owned >= item.ownership_limit:
-        return None, price, (
-            f"You already own the maximum of **{item.fmt_name()}** "
-            f"({item.ownership_limit})."
+        return (
+            None,
+            price,
+            (
+                f"You already own the maximum of **{item.fmt_name()}** "
+                f"({item.ownership_limit})."
+            ),
         )
     beans_emoji = core.config.data["emojis"]["beans"]
     if user_doc.get("beans", 0) < item.cost_for(owned):
-        return None, price, (
-            f"Not enough beans. You need {beans_emoji} `{item.cost_for(owned):,}` "
-            f"but only have `{user_doc.get('beans', 0):,}`."
+        return (
+            None,
+            price,
+            (
+                f"Not enough beans. You need {beans_emoji} `{item.cost_for(owned):,}` "
+                f"but only have `{user_doc.get('beans', 0):,}`."
+            ),
         )
-    return None, price, "The shop was busy — try that again."
+    return None, price, "The shop was busy - try that again."
 
 
 def attempt_purchase_many(
@@ -417,13 +426,23 @@ def attempt_purchase_many(
     beans = user_doc.get("beans", 0)
 
     if not item.is_unlocked(inventory):
-        return None, 0, 0, (
-            f"**{item.fmt_name()}** is locked — own "
-            f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
+        return (
+            None,
+            0,
+            0,
+            (
+                f"**{item.fmt_name()}** is locked - own "
+                f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
+            ),
         )
     if item.ownership_limit > 0 and owned >= item.ownership_limit:
-        return None, 0, 0, (
-            f"You already own the maximum of **{item.fmt_name()}** ({item.ownership_limit})."
+        return (
+            None,
+            0,
+            0,
+            (
+                f"You already own the maximum of **{item.fmt_name()}** ({item.ownership_limit})."
+            ),
         )
 
     # How many can we actually buy: limited by ownership cap, then affordability
@@ -438,9 +457,14 @@ def attempt_purchase_many(
 
     beans_emoji = core.config.data["emojis"]["beans"]
     if count == 0:
-        return None, 0, 0, (
-            f"Not enough beans. One {item.fmt_name()} costs {beans_emoji} "
-            f"`{item.cost_for(owned):,}` but you only have `{beans:,}`."
+        return (
+            None,
+            0,
+            0,
+            (
+                f"Not enough beans. One {item.fmt_name()} costs {beans_emoji} "
+                f"`{item.cost_for(owned):,}` but you only have `{beans:,}`."
+            ),
         )
 
     query = {"_id": str(user_id), "beans": {"$gte": total}}
@@ -456,7 +480,7 @@ def attempt_purchase_many(
         query, update, return_document=ReturnDocument.AFTER
     )
     if doc is None:
-        return None, 0, 0, "The shop was busy — try that again."
+        return None, 0, 0, "The shop was busy - try that again."
     if item.category in ("generators", "generator_upgrades"):
         sync_generator_rate(user_id, doc.get("inventory", {}))
     return doc, total, count, None
@@ -481,7 +505,7 @@ def attempt_sell(user_id: int, item: Item) -> tuple[dict | None, int, str | None
         return_document=ReturnDocument.AFTER,
     )
     if doc is None:
-        return None, 0, "The shop was busy — try that again."
+        return None, 0, "The shop was busy - try that again."
     if item.category in ("generators", "generator_upgrades"):
         sync_generator_rate(user_id, doc.get("inventory", {}))
     return doc, refund, None
@@ -522,7 +546,7 @@ def build_shop_embed(
 
     embed = Embed(
         color=core.config.data["colors"]["primary"],
-        title=f"{core.config.data['bot']['name']} Shop — {page_title}",
+        title=f"{core.config.data['bot']['name']} Shop - {page_title}",
         description=description,
     )
     qty_note = f"Buying ×{quantity} · " if quantity > 1 else ""
@@ -544,10 +568,12 @@ class BuySelect(Select):
             price = item.bulk_cost(owned, q)
             options.append(
                 SelectOption(
-                    label=f"{item.fmt_name()}{qty_tag} — {price:,} beans",
+                    label=f"{item.fmt_name()}{qty_tag} - {price:,} beans",
                     value=item.name,
                     emoji=item.emoji,
-                    description="Owned limit reached" if at_limit else item.description[:100],
+                    description=(
+                        "Owned limit reached" if at_limit else item.description[:100]
+                    ),
                 )
             )
         if options:
@@ -583,7 +609,7 @@ class SellSelect(Select):
             if owned > 0:
                 options.append(
                     SelectOption(
-                        label=f"{item.fmt_name()} — sell for {item.sell_value_for(owned):,} beans",
+                        label=f"{item.fmt_name()} - sell for {item.sell_value_for(owned):,} beans",
                         value=item.name,
                         emoji=item.emoji,
                         description=f"You own {owned}",
@@ -655,18 +681,26 @@ def _resolve_tier(user_id: int, doc: dict, box_name: str) -> dict:
             {"_id": str(user_id)},
             {"$inc": {"beans": amount, "totalBeansEarned": amount}},
         )
-        return {"type": "beans", "amount": amount, "label": label,
-                "multiplied": multiplied, "multiplier": multiplier}
+        return {
+            "type": "beans",
+            "amount": amount,
+            "label": label,
+            "multiplied": multiplied,
+            "multiplier": multiplier,
+        }
 
     if tier["type"] == "golden":
         amount = random.randint(tier["min"], tier["max"])
-        database.users.update_one({"_id": str(user_id)}, {"$inc": {"goldenBeans": amount}})
+        database.users.update_one(
+            {"_id": str(user_id)}, {"$inc": {"goldenBeans": amount}}
+        )
         return {"type": "golden", "amount": amount, "label": label}
 
     if tier["type"] == "item":
         pools = tier.get("pool", [])
         eligible = [
-            i for i in SHOP_INVENTORY
+            i
+            for i in SHOP_INVENTORY
             if i.category in pools
             and i.name not in BOX_NAMES
             and (i.ownership_limit == 0 or inventory.get(i.name, 0) < i.ownership_limit)
@@ -677,14 +711,21 @@ def _resolve_tier(user_id: int, doc: dict, box_name: str) -> dict:
             if prize.beans_per_hour > 0 and doc.get("lastCollect") is None:
                 update["$set"] = {"lastCollect": datetime.now(timezone.utc)}
             database.users.update_one({"_id": str(user_id)}, update)
-            return {"type": "item", "item": prize,
-                    "generator": prize.category in ("generators", "generator_upgrades")}
+            return {
+                "type": "item",
+                "item": prize,
+                "generator": prize.category in ("generators", "generator_upgrades"),
+            }
         return _give_beans(
-            random.randint(tier.get("fallback_min", 20000), tier.get("fallback_max", 50000)),
+            random.randint(
+                tier.get("fallback_min", 20000), tier.get("fallback_max", 50000)
+            ),
             multiplied=False,
         )
 
-    return _give_beans(random.randint(tier["min"], tier["max"]), tier.get("multiplied", False))
+    return _give_beans(
+        random.randint(tier["min"], tier["max"]), tier.get("multiplied", False)
+    )
 
 
 def _format_reward(reward: dict) -> str:
@@ -727,7 +768,9 @@ def _roll_box(user_id: int, box_name: str) -> tuple[str, int] | tuple[None, None
     return result, remaining
 
 
-def _open_many(user_id: int, box_name: str, count: int) -> tuple[str, int] | tuple[None, None]:
+def _open_many(
+    user_id: int, box_name: str, count: int
+) -> tuple[str, int] | tuple[None, None]:
     """Open up to `count` boxes at once, returning an aggregated summary."""
     if box_name not in LOOT_TABLES:
         return None, None
@@ -765,7 +808,8 @@ def _open_many(user_id: int, box_name: str, count: int) -> tuple[str, int] | tup
         lines.append(f"{golden_emoji} `+{golden_total}` golden beans")
     if items:
         item_str = ", ".join(
-            f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()} ×{c}" for n, c in items.items()
+            f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()} ×{c}"
+            for n, c in items.items()
         )
         lines.append(f"🎁 {item_str}")
     summary = "\n".join(lines) + format_unlocks(check_achievements(user_id, fresh))
@@ -778,7 +822,9 @@ MAX_BULK_OPEN = 10  # ceiling for a single "Open All" / bulk /open
 
 
 class OpenBoxView(View):
-    def __init__(self, user_id: int, box_name: str, remaining: int, has_opener: bool = False):
+    def __init__(
+        self, user_id: int, box_name: str, remaining: int, has_opener: bool = False
+    ):
         super().__init__(timeout=120)
         self.user_id = user_id
         self.box_name = box_name
@@ -806,7 +852,9 @@ class OpenBoxView(View):
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("These aren't your boxes!", ephemeral=True)
+            await interaction.response.send_message(
+                "These aren't your boxes!", ephemeral=True
+            )
             return False
         return True
 
@@ -827,7 +875,9 @@ class OpenBoxView(View):
             ephemeral=True,
         )
 
-    async def _show(self, interaction: Interaction, result: str, remaining: int) -> None:
+    async def _show(
+        self, interaction: Interaction, result: str, remaining: int
+    ) -> None:
         box = ITEM_MAP[self.box_name]
         self._set_disabled(remaining)
         embed = Embed(
@@ -844,7 +894,9 @@ class OpenBoxView(View):
         await self._show(interaction, result, remaining)
 
     async def _open_all(self, interaction: Interaction):
-        result, remaining = _open_many(interaction.user.id, self.box_name, MAX_BULK_OPEN)
+        result, remaining = _open_many(
+            interaction.user.id, self.box_name, MAX_BULK_OPEN
+        )
         if result is None:
             return await self._empty_followup(interaction)
         await self._show(interaction, result, remaining)
@@ -852,7 +904,9 @@ class OpenBoxView(View):
 
 class PageButton(Button):
     def __init__(self, label: str, delta: int, disabled: bool):
-        super().__init__(label=label, style=ButtonStyle.primary, disabled=disabled, row=2)
+        super().__init__(
+            label=label, style=ButtonStyle.primary, disabled=disabled, row=2
+        )
         self.delta = delta
 
     async def callback(self, interaction: Interaction):
@@ -913,7 +967,8 @@ class ShopView(View):
         new_view.message = self.message
         self.stop()
         await interaction.response.edit_message(
-            embed=build_shop_embed(user_doc, new_page, action, self.quantity), view=new_view
+            embed=build_shop_embed(user_doc, new_page, action, self.quantity),
+            view=new_view,
         )
 
     async def on_timeout(self):
@@ -972,7 +1027,9 @@ class Shop(Cog):
         )
         await ctx.response.send_message(embed=embed)
 
-    @app_commands.command(name="sell", description="Sell an item back for 80% of what you paid")
+    @app_commands.command(
+        name="sell", description="Sell an item back for 80% of what you paid"
+    )
     @app_commands.describe(item="The item to sell")
     @app_commands.autocomplete(item=sellable_autocomplete)
     async def sell(self, ctx: Interaction, item: str):
@@ -1001,10 +1058,14 @@ class Shop(Cog):
         await ctx.response.send_message(embed=embed)
 
     @app_commands.command(name="open", description="Open a mystery box or crate")
-    @app_commands.describe(box="Which box to open", amount="How many to open (needs a Box Opener)")
+    @app_commands.describe(
+        box="Which box to open", amount="How many to open (needs a Box Opener)"
+    )
     @app_commands.choices(
         box=[
-            app_commands.Choice(name=f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()}", value=n)
+            app_commands.Choice(
+                name=f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()}", value=n
+            )
             for n in BOX_NAMES
         ]
     )
@@ -1060,7 +1121,11 @@ class Shop(Cog):
         embed = Embed(
             color=core.config.data["colors"]["primary"],
             title=f"{ctx.user.display_name}'s Inventory",
-            description="\n".join(owned_items) if owned_items else "No items yet. Check out `/shop`!",
+            description=(
+                "\n".join(owned_items)
+                if owned_items
+                else "No items yet. Check out `/shop`!"
+            ),
         )
         cooldown_value = f"**{effective / 3600:.1f}hrs**"
         if reduction > 0:
@@ -1071,7 +1136,7 @@ class Shop(Cog):
         if rate > 0:
             embed.add_field(
                 name="Generators",
-                value=f"**{rate:,}** beans/hr — claim with `/collect`",
+                value=f"**{rate:,}** beans/hr - claim with `/collect`",
                 inline=False,
             )
 
