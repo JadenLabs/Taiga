@@ -169,6 +169,11 @@ PERMANENT_MAP: dict[str, PermanentUpgrade] = {u.name: u for u in PERMANENT_UPGRA
 
 ACHIEVEMENTS: list[dict] = core.config.data.get("achievements", [])
 
+# Mystery box loot tables, keyed by the box item's name. A "box" is any shop
+# item that has a loot table here.
+LOOT_TABLES: dict[str, list[dict]] = core.config.data.get("loot_tables", {})
+BOX_NAMES: list[str] = list(LOOT_TABLES.keys())
+
 
 def get_permanent_level(user_doc: dict, name: str) -> int:
     return user_doc.get("permanentUpgrades", {}).get(name, 0)
@@ -517,64 +522,116 @@ class SellSelect(Select):
         await self.view.refresh(interaction, doc, action)
 
 
-def _roll_box(user_id: int) -> tuple[str, int] | tuple[None, None]:
-    """Atomically consume one mystery box and roll a reward.
+def _pick_tier(tiers: list[dict], luck: float) -> dict:
+    """Weighted choice across a loot table. Lucky Whiskers shifts weight from
+    the luck_donor tier to the luck_target tier (net weight is preserved)."""
+    weights = []
+    for tier in tiers:
+        w = tier.get("weight", 0.0)
+        if tier.get("luck_target"):
+            w += luck
+        if tier.get("luck_donor"):
+            w -= luck
+        weights.append(max(w, 0.0))
 
-    Returns (result_description, boxes_remaining) or (None, None) if no box found.
+    total = sum(weights) or 1.0
+    r = random.random() * total
+    cumulative = 0.0
+    for tier, w in zip(tiers, weights):
+        cumulative += w
+        if r < cumulative:
+            return tier
+    return tiers[-1]
+
+
+def _roll_box(user_id: int, box_name: str) -> tuple[str, int] | tuple[None, None]:
+    """Atomically consume one box of `box_name` and roll a reward from its loot
+    table. Returns (result_description, boxes_remaining) or (None, None) if the
+    user owns no such box.
     """
-    box = ITEM_MAP["mystery_box"]
     beans_emoji = core.config.data["emojis"]["beans"]
+    golden_emoji = core.config.data["emojis"]["golden_beans"]
+    tiers = LOOT_TABLES.get(box_name)
+    if not tiers:
+        return None, None
 
     doc = database.users.find_one_and_update(
-        {"_id": str(user_id), "inventory.mystery_box": {"$gte": 1}},
-        {"$inc": {"inventory.mystery_box": -1}},
+        {"_id": str(user_id), f"inventory.{box_name}": {"$gte": 1}},
+        {"$inc": {f"inventory.{box_name}": -1}},
         return_document=ReturnDocument.AFTER,
     )
     if doc is None:
         return None, None
 
-    luck = get_box_luck(doc)
-    roll = random.random()
-    if roll < 0.10 + luck:
-        amount = random.randint(150000, 300000)
-        database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
-        result = f"💎 **JACKPOT!** {beans_emoji} `+{amount:,}` beans!"
-    elif roll < 0.40:
-        inventory = doc.get("inventory", {})
+    inventory = doc.get("inventory", {})
+    multiplier = get_bean_multiplier(doc)
+    tier = _pick_tier(tiers, get_box_luck(doc))
+    label = tier.get("label", "")
+    generator_changed = False
+
+    def _give_beans(amount: int, multiplied: bool) -> str:
+        if multiplied:
+            amount = round(amount * multiplier)
+        database.users.update_one(
+            {"_id": str(user_id)},
+            {"$inc": {"beans": amount, "totalBeansEarned": amount}},
+        )
+        note = f" `×{multiplier:.2f}`" if multiplied and multiplier > 1.01 else ""
+        prefix = f"{label} " if label else ""
+        return f"{prefix}{beans_emoji} `+{amount:,}` beans!{note}"
+
+    if tier["type"] == "golden":
+        amount = random.randint(tier["min"], tier["max"])
+        database.users.update_one({"_id": str(user_id)}, {"$inc": {"goldenBeans": amount}})
+        prefix = f"{label} " if label else ""
+        result = f"{prefix}{golden_emoji} `+{amount}` golden beans!"
+    elif tier["type"] == "item":
+        pools = tier.get("pool", [])
         eligible = [
             i for i in SHOP_INVENTORY
-            if i.category in ("boosts", "consumables")
-            and i.name != "mystery_box"
+            if i.category in pools
+            and i.name not in BOX_NAMES
             and (i.ownership_limit == 0 or inventory.get(i.name, 0) < i.ownership_limit)
         ]
         if eligible:
             prize = random.choice(eligible)
-            database.users.update_one(
-                {"_id": str(user_id)},
-                {"$inc": {f"inventory.{prize.name}": 1}},
-            )
+            update = {"$inc": {f"inventory.{prize.name}": 1}}
+            if prize.beans_per_hour > 0 and doc.get("lastCollect") is None:
+                update["$set"] = {"lastCollect": datetime.now(timezone.utc)}
+            database.users.update_one({"_id": str(user_id)}, update)
+            generator_changed = prize.category in ("generators", "generator_upgrades")
             result = f"You found {prize.emoji} **{prize.fmt_name()}**!"
         else:
-            amount = random.randint(20000, 50000)
-            database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
-            result = f"{beans_emoji} `+{amount:,}` beans!"
-    else:
-        amount = random.randint(10000, 40000)
-        database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
-        result = f"{beans_emoji} `+{amount:,}` beans!"
+            result = _give_beans(
+                random.randint(tier.get("fallback_min", 20000), tier.get("fallback_max", 50000)),
+                multiplied=False,
+            )
+    else:  # "beans"
+        result = _give_beans(
+            random.randint(tier["min"], tier["max"]),
+            multiplied=tier.get("multiplied", False),
+        )
 
-    remaining = doc.get("inventory", {}).get("mystery_box", 0)
+    # Refresh once for rate sync, achievements, and the remaining count
+    fresh = database.users.find_one({"_id": str(user_id)}) or doc
+    if generator_changed:
+        sync_generator_rate(user_id, fresh.get("inventory", {}))
+    result += format_unlocks(check_achievements(user_id, fresh))
+
+    remaining = fresh.get("inventory", {}).get(box_name, 0)
     return result, remaining
 
 
 class OpenBoxView(View):
-    def __init__(self, user_id: int, remaining: int):
+    def __init__(self, user_id: int, box_name: str, remaining: int):
         super().__init__(timeout=120)
         self.user_id = user_id
+        self.box_name = box_name
+        box = ITEM_MAP[box_name]
         self._btn = Button(
             label="Open Another",
             style=ButtonStyle.primary,
-            emoji="📦",
+            emoji=box.emoji,
             disabled=(remaining == 0),
         )
         self._btn.callback = self._open_another
@@ -587,15 +644,15 @@ class OpenBoxView(View):
         return True
 
     async def _open_another(self, interaction: Interaction):
-        box = ITEM_MAP["mystery_box"]
-        result, remaining = _roll_box(interaction.user.id)
+        box = ITEM_MAP[self.box_name]
+        result, remaining = _roll_box(interaction.user.id, self.box_name)
         if result is None:
             self._btn.disabled = True
             await interaction.response.edit_message(view=self)
             await interaction.followup.send(
                 embed=Embed(
                     color=core.config.data["colors"]["error"],
-                    description=f"You don't have any {box.emoji} **Mystery Boxes** left!",
+                    description=f"You don't have any {box.emoji} **{box.fmt_name()}** left!",
                 ),
                 ephemeral=True,
             )
@@ -604,8 +661,8 @@ class OpenBoxView(View):
         self._btn.disabled = (remaining == 0)
         embed = Embed(
             color=core.config.data["colors"]["secondary"],
-            title=f"{box.emoji} Mystery Box opened!",
-            description=f"{result}\n-# Boxes left: {remaining}",
+            title=f"{box.emoji} {box.fmt_name()} opened!",
+            description=f"{result}\n-# {box.fmt_name()}s left: {remaining}",
         )
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -742,23 +799,32 @@ class Shop(Cog):
         )
         await ctx.response.send_message(embed=embed)
 
-    @app_commands.command(name="open", description="Open a mystery box")
-    async def open(self, ctx: Interaction):
-        box = ITEM_MAP["mystery_box"]
-        result, remaining = _roll_box(ctx.user.id)
+    @app_commands.command(name="open", description="Open a mystery box or crate")
+    @app_commands.describe(box="Which box to open")
+    @app_commands.choices(
+        box=[
+            app_commands.Choice(name=f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()}", value=n)
+            for n in BOX_NAMES
+        ]
+    )
+    async def open(self, ctx: Interaction, box: str = "mystery_box"):
+        if box not in LOOT_TABLES:
+            box = "mystery_box"
+        box_item = ITEM_MAP[box]
+        result, remaining = _roll_box(ctx.user.id, box)
         if result is None:
             embed = Embed(
                 color=core.config.data["colors"]["error"],
-                description=f"You don't have any {box.emoji} **Mystery Boxes**. Grab one in `/shop`!",
+                description=f"You don't have any {box_item.emoji} **{box_item.fmt_name()}s**. Grab one in `/shop`!",
             )
             return await ctx.response.send_message(embed=embed, ephemeral=True)
 
         embed = Embed(
             color=core.config.data["colors"]["secondary"],
-            title=f"{box.emoji} Mystery Box opened!",
-            description=f"{result}\n-# Boxes left: {remaining}",
+            title=f"{box_item.emoji} {box_item.fmt_name()} opened!",
+            description=f"{result}\n-# {box_item.fmt_name()}s left: {remaining}",
         )
-        await ctx.response.send_message(embed=embed, view=OpenBoxView(ctx.user.id, remaining))
+        await ctx.response.send_message(embed=embed, view=OpenBoxView(ctx.user.id, box, remaining))
 
     @app_commands.command(name="inventory", description="View your items")
     async def inventory(self, ctx: Interaction):

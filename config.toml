@@ -311,6 +311,14 @@ ownership_limit = 5
 emoji = "📦"
 category = "consumables"
 
+[[shop.items]]
+name = "golden_crate"
+description = "A premium crate. Multiplied beans, generators, even golden beans."
+cost = 2000000
+ownership_limit = 3
+emoji = "🎁"
+category = "consumables"
+
 # ───── Cosmetics ─────
 # Cosmetics survive prestige and show on /profile.
 
@@ -492,6 +500,77 @@ threshold = 500
 reward_golden = 3
 bonus = 0.04
 hidden = true
+
+# ───── Mystery Box Loot Tables ─────
+# Each box item (matched by name) has an ordered list of reward tiers.
+#   weight       relative chance (the weights for a box should sum to 1.0)
+#   type         "beans" | "golden" | "item"
+#   multiplied   beans tiers only — run the payout through the bean multiplier
+#   pool         item tiers only — which shop categories to draw a prize from
+#   fallback_*   item tiers only — beans range if no eligible prize exists
+#   luck_target  Lucky Whiskers adds its % to this tier's weight
+#   luck_donor   Lucky Whiskers subtracts its % from this tier's weight
+#   label        optional flourish prefixed to the result line
+
+[[loot_tables.mystery_box]]
+weight = 0.10
+type = "beans"
+min = 150000
+max = 300000
+luck_target = true
+label = "💎 **JACKPOT!**"
+
+[[loot_tables.mystery_box]]
+weight = 0.30
+type = "item"
+pool = ["boosts", "consumables"]
+fallback_min = 20000
+fallback_max = 50000
+luck_donor = true
+
+[[loot_tables.mystery_box]]
+weight = 0.60
+type = "beans"
+min = 10000
+max = 40000
+
+[[loot_tables.golden_crate]]
+weight = 0.05
+type = "golden"
+min = 1
+max = 2
+luck_target = true
+label = "✨ **GOLDEN BEAN!**"
+
+[[loot_tables.golden_crate]]
+weight = 0.20
+type = "beans"
+min = 1000000
+max = 3000000
+multiplied = true
+label = "💎 **MEGA JACKPOT!**"
+
+[[loot_tables.golden_crate]]
+weight = 0.20
+type = "item"
+pool = ["generators"]
+fallback_min = 300000
+fallback_max = 800000
+
+[[loot_tables.golden_crate]]
+weight = 0.20
+type = "item"
+pool = ["boosts", "consumables", "cosmetics"]
+fallback_min = 200000
+fallback_max = 600000
+luck_donor = true
+
+[[loot_tables.golden_crate]]
+weight = 0.35
+type = "beans"
+min = 300000
+max = 800000
+multiplied = true
 
 [messages]
 fishing = [
