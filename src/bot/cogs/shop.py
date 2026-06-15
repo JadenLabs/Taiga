@@ -118,6 +118,21 @@ async def item_autocomplete(
     ]
 
 
+async def sellable_autocomplete(
+    interaction: Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Item picker for /sell — cosmetics are excluded since they can't be sold."""
+    cur = current.lower()
+    matches = [
+        i for i in SHOP_INVENTORY
+        if i.category != "cosmetics" and (cur in i.fmt_name().lower() or cur in i.name)
+    ]
+    return [
+        app_commands.Choice(name=f"{i.emoji} {i.fmt_name()}", value=i.name)
+        for i in matches[:25]
+    ]
+
+
 GENERATORS: list[Item] = [i for i in SHOP_INVENTORY if i.category == "generators"]
 GENERATOR_UPGRADES: list[Item] = [
     i for i in SHOP_INVENTORY if i.category == "generator_upgrades"
@@ -364,6 +379,9 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
 def attempt_sell(user_id: int, item: Item) -> tuple[dict | None, int, str | None]:
     """Atomically sells one item for SELL_RATE of the price paid for it.
     Returns (updated_doc, refund, error_message)."""
+    if item.category == "cosmetics":
+        return None, 0, f"**{item.fmt_name()}** is a cosmetic and can't be sold."
+
     user_doc = find_user_or_default(user_id)
     owned = user_doc.get("inventory", {}).get(item.name, 0)
     if owned < 1:
@@ -462,6 +480,8 @@ class SellSelect(Select):
     def __init__(self, inventory: dict):
         options = []
         for item in SHOP_INVENTORY:
+            if item.category == "cosmetics":
+                continue  # cosmetics can't be sold
             owned = inventory.get(item.name, 0)
             if owned > 0:
                 options.append(
@@ -691,7 +711,7 @@ class Shop(Cog):
 
     @app_commands.command(name="sell", description="Sell an item back for 80% of what you paid")
     @app_commands.describe(item="The item to sell")
-    @app_commands.autocomplete(item=item_autocomplete)
+    @app_commands.autocomplete(item=sellable_autocomplete)
     async def sell(self, ctx: Interaction, item: str):
         shop_item = ITEM_MAP.get(item)
         if shop_item is None:
