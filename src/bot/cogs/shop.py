@@ -264,6 +264,98 @@ class SellSelect(Select):
         await self.view.refresh(interaction, doc, action)
 
 
+def _roll_box(user_id: int) -> tuple[str, int] | tuple[None, None]:
+    """Atomically consume one mystery box and roll a reward.
+
+    Returns (result_description, boxes_remaining) or (None, None) if no box found.
+    """
+    box = ITEM_MAP["mystery_box"]
+    beans_emoji = core.config.data["emojis"]["beans"]
+
+    doc = database.users.find_one_and_update(
+        {"_id": str(user_id), "inventory.mystery_box": {"$gte": 1}},
+        {"$inc": {"inventory.mystery_box": -1}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if doc is None:
+        return None, None
+
+    roll = random.random()
+    if roll < 0.10:
+        amount = random.randint(150000, 300000)
+        database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
+        result = f"💎 **JACKPOT!** {beans_emoji} `+{amount:,}` beans!"
+    elif roll < 0.40:
+        inventory = doc.get("inventory", {})
+        eligible = [
+            i for i in SHOP_INVENTORY
+            if i.category in ("boosts", "consumables")
+            and i.name != "mystery_box"
+            and (i.ownership_limit == 0 or inventory.get(i.name, 0) < i.ownership_limit)
+        ]
+        if eligible:
+            prize = random.choice(eligible)
+            database.users.update_one(
+                {"_id": str(user_id)},
+                {"$inc": {f"inventory.{prize.name}": 1}},
+            )
+            result = f"You found {prize.emoji} **{prize.fmt_name()}**!"
+        else:
+            amount = random.randint(20000, 50000)
+            database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
+            result = f"{beans_emoji} `+{amount:,}` beans!"
+    else:
+        amount = random.randint(10000, 40000)
+        database.users.update_one({"_id": str(user_id)}, {"$inc": {"beans": amount}})
+        result = f"{beans_emoji} `+{amount:,}` beans!"
+
+    remaining = doc.get("inventory", {}).get("mystery_box", 0)
+    return result, remaining
+
+
+class OpenBoxView(View):
+    def __init__(self, user_id: int, remaining: int):
+        super().__init__(timeout=120)
+        self.user_id = user_id
+        self._btn = Button(
+            label="Open Another",
+            style=ButtonStyle.primary,
+            emoji="📦",
+            disabled=(remaining == 0),
+        )
+        self._btn.callback = self._open_another
+        self.add_item(self._btn)
+
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("These aren't your boxes!", ephemeral=True)
+            return False
+        return True
+
+    async def _open_another(self, interaction: Interaction):
+        box = ITEM_MAP["mystery_box"]
+        result, remaining = _roll_box(interaction.user.id)
+        if result is None:
+            self._btn.disabled = True
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                embed=Embed(
+                    color=core.config.data["colors"]["error"],
+                    description=f"You don't have any {box.emoji} **Mystery Boxes** left!",
+                ),
+                ephemeral=True,
+            )
+            return
+
+        self._btn.disabled = (remaining == 0)
+        embed = Embed(
+            color=core.config.data["colors"]["secondary"],
+            title=f"{box.emoji} Mystery Box opened!",
+            description=f"{result}\n-# Boxes left: {remaining}",
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
 class PageButton(Button):
     def __init__(self, label: str, delta: int, disabled: bool):
         super().__init__(label=label, style=ButtonStyle.primary, disabled=disabled, row=2)
@@ -397,63 +489,20 @@ class Shop(Cog):
     @app_commands.command(name="open", description="Open a mystery box")
     async def open(self, ctx: Interaction):
         box = ITEM_MAP["mystery_box"]
-        beans_emoji = core.config.data["emojis"]["beans"]
-
-        # Consume one box atomically
-        doc = database.users.find_one_and_update(
-            {"_id": str(ctx.user.id), "inventory.mystery_box": {"$gte": 1}},
-            {"$inc": {"inventory.mystery_box": -1}},
-            return_document=ReturnDocument.AFTER,
-        )
-        if doc is None:
+        result, remaining = _roll_box(ctx.user.id)
+        if result is None:
             embed = Embed(
                 color=core.config.data["colors"]["error"],
                 description=f"You don't have any {box.emoji} **Mystery Boxes**. Grab one in `/shop`!",
             )
             return await ctx.response.send_message(embed=embed, ephemeral=True)
 
-        roll = random.random()
-        if roll < 0.10:  # jackpot
-            amount = random.randint(150000, 300000)
-            database.users.update_one(
-                {"_id": str(ctx.user.id)}, {"$inc": {"beans": amount}}
-            )
-            result = f"💎 **JACKPOT!** {beans_emoji} `+{amount:,}` beans!"
-        elif roll < 0.40:  # random item
-            inventory = doc.get("inventory", {})
-            eligible = [
-                i for i in SHOP_INVENTORY
-                if i.category in ("boosts", "consumables")
-                and i.name != "mystery_box"
-                and (i.ownership_limit == 0 or inventory.get(i.name, 0) < i.ownership_limit)
-            ]
-            if eligible:
-                prize = random.choice(eligible)
-                database.users.update_one(
-                    {"_id": str(ctx.user.id)},
-                    {"$inc": {f"inventory.{prize.name}": 1}},
-                )
-                result = f"You found {prize.emoji} **{prize.fmt_name()}**!"
-            else:
-                amount = random.randint(20000, 50000)
-                database.users.update_one(
-                    {"_id": str(ctx.user.id)}, {"$inc": {"beans": amount}}
-                )
-                result = f"{beans_emoji} `+{amount:,}` beans!"
-        else:  # beans
-            amount = random.randint(10000, 40000)
-            database.users.update_one(
-                {"_id": str(ctx.user.id)}, {"$inc": {"beans": amount}}
-            )
-            result = f"{beans_emoji} `+{amount:,}` beans!"
-
-        remaining = doc.get("inventory", {}).get("mystery_box", 0)
         embed = Embed(
             color=core.config.data["colors"]["secondary"],
             title=f"{box.emoji} Mystery Box opened!",
             description=f"{result}\n-# Boxes left: {remaining}",
         )
-        await ctx.response.send_message(embed=embed)
+        await ctx.response.send_message(embed=embed, view=OpenBoxView(ctx.user.id, remaining))
 
     @app_commands.command(name="inventory", description="View your items")
     async def inventory(self, ctx: Interaction):
