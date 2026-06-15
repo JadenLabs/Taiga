@@ -307,9 +307,17 @@ category = "consumables"
 name = "mystery_box"
 description = "Who knows what's inside? Use /open to find out."
 cost = 25000
-ownership_limit = 5
+ownership_limit = 10
 emoji = "📦"
 category = "consumables"
+
+[[shop.items]]
+name = "box_opener"
+description = "Adds an Open All button — open every box of a type at once."
+cost = 200000
+ownership_limit = 1
+emoji = "🔓"
+category = "boosts"
 
 [[shop.items]]
 name = "golden_crate"

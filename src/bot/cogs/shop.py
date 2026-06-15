@@ -57,10 +57,20 @@ class Item:
         SELL_RATE of the price that was paid for the most recent one."""
         return int(self.cost_for(max(owned - 1, 0)) * SELL_RATE)
 
+    def buyable_qty(self, owned: int, qty: int) -> int:
+        """How many of `qty` can actually be bought given the ownership limit."""
+        if self.ownership_limit > 0:
+            return max(0, min(qty, self.ownership_limit - owned))
+        return qty
+
+    def bulk_cost(self, owned: int, qty: int) -> int:
+        """Total price to buy `qty` units starting from `owned` (price scales)."""
+        return sum(self.cost_for(owned + i) for i in range(qty))
+
     def fmt_name(self) -> str:
         return self.name.replace("_", " ").title()
 
-    def fmt_shop_item(self, owned: int = 0) -> str:
+    def fmt_shop_item(self, owned: int = 0, quantity: int = 1) -> str:
         notes = []
         if self.cooldown_reduction > 0:
             mins = self.cooldown_reduction // 60
@@ -80,10 +90,16 @@ class Item:
         elif owned > 0:
             notes.append(f"owned {owned}")
         subtext = " · ".join(notes)
-        price = self.cost_for(owned)
-        price_str = f"`{price:,}` beans"
-        if self.price_growth > 1.0 and owned > 0:
-            price_str = f"`{price:,}` beans (next)"
+
+        # Price reflects the selected buy quantity (capped by the ownership limit)
+        buy_qty = self.buyable_qty(owned, quantity) if quantity > 1 else 1
+        if buy_qty > 1:
+            price_str = f"`{self.bulk_cost(owned, buy_qty):,}` beans for ×{buy_qty}"
+        else:
+            price = self.cost_for(owned)
+            price_str = f"`{price:,}` beans"
+            if self.price_growth > 1.0 and owned > 0:
+                price_str += " (next)"
         return (
             f"{self.emoji} **{self.fmt_name()}** — {price_str}\n"
             f"-# {self.description}" + (f" · {subtext}" if subtext else "")
@@ -386,6 +402,66 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
     return None, price, "The shop was busy — try that again."
 
 
+def attempt_purchase_many(
+    user_id: int, item: Item, qty: int
+) -> tuple[dict | None, int, int, str | None]:
+    """Buy up to `qty` units in one transaction, capped by the ownership limit
+    and what the user can afford. Returns (doc, total_paid, count_bought, error)."""
+    if qty <= 1:
+        doc, price, error = attempt_purchase(user_id, item)
+        return doc, price, (1 if doc is not None else 0), error
+
+    user_doc = find_user_or_default(user_id)
+    inventory = user_doc.get("inventory", {})
+    owned = inventory.get(item.name, 0)
+    beans = user_doc.get("beans", 0)
+
+    if not item.is_unlocked(inventory):
+        return None, 0, 0, (
+            f"**{item.fmt_name()}** is locked — own "
+            f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
+        )
+    if item.ownership_limit > 0 and owned >= item.ownership_limit:
+        return None, 0, 0, (
+            f"You already own the maximum of **{item.fmt_name()}** ({item.ownership_limit})."
+        )
+
+    # How many can we actually buy: limited by ownership cap, then affordability
+    want = item.buyable_qty(owned, qty)
+    count, total = 0, 0
+    while count < want:
+        next_price = item.cost_for(owned + count)
+        if beans - total < next_price:
+            break
+        total += next_price
+        count += 1
+
+    beans_emoji = core.config.data["emojis"]["beans"]
+    if count == 0:
+        return None, 0, 0, (
+            f"Not enough beans. One {item.fmt_name()} costs {beans_emoji} "
+            f"`{item.cost_for(owned):,}` but you only have `{beans:,}`."
+        )
+
+    query = {"_id": str(user_id), "beans": {"$gte": total}}
+    if item.price_growth > 1.0 or item.ownership_limit > 0:
+        # Price/limit depend on the owned count, so require it unchanged
+        query[f"inventory.{item.name}"] = owned if owned > 0 else {"$not": {"$gte": 1}}
+
+    update = {"$inc": {f"inventory.{item.name}": count, "beans": -total}}
+    if item.beans_per_hour > 0 and user_doc.get("lastCollect") is None:
+        update["$set"] = {"lastCollect": datetime.now(timezone.utc)}
+
+    doc = database.users.find_one_and_update(
+        query, update, return_document=ReturnDocument.AFTER
+    )
+    if doc is None:
+        return None, 0, 0, "The shop was busy — try that again."
+    if item.category in ("generators", "generator_upgrades"):
+        sync_generator_rate(user_id, doc.get("inventory", {}))
+    return doc, total, count, None
+
+
 def attempt_sell(user_id: int, item: Item) -> tuple[dict | None, int, str | None]:
     """Atomically sells one item for SELL_RATE of the price paid for it.
     Returns (updated_doc, refund, error_message)."""
@@ -422,7 +498,9 @@ def visible_page_items(page_items: list[Item], inventory: dict) -> list[Item]:
     return result
 
 
-def build_shop_embed(user_doc: dict, page: int, action: str | None = None) -> Embed:
+def build_shop_embed(
+    user_doc: dict, page: int, action: str | None = None, quantity: int = 1
+) -> Embed:
     inventory = user_doc.get("inventory", {})
     beans = user_doc.get("beans", 0)
     beans_emoji = core.config.data["emojis"]["beans"]
@@ -431,7 +509,8 @@ def build_shop_embed(user_doc: dict, page: int, action: str | None = None) -> Em
 
     if shown:
         items = "\n".join(
-            item.fmt_shop_item(owned=inventory.get(item.name, 0)) for item in shown
+            item.fmt_shop_item(owned=inventory.get(item.name, 0), quantity=quantity)
+            for item in shown
         )
     elif page_items and page_items[0].category == "generator_upgrades":
         items = "-# Buy more generators to unlock upgrades for them."
@@ -446,21 +525,26 @@ def build_shop_embed(user_doc: dict, page: int, action: str | None = None) -> Em
         title=f"{core.config.data['bot']['name']} Shop — {page_title}",
         description=description,
     )
+    qty_note = f"Buying ×{quantity} · " if quantity > 1 else ""
     embed.set_footer(
-        text=f"Page {page + 1}/{len(SHOP_PAGES)} · Items sell back for {SELL_RATE:.0%} of what you paid"
+        text=f"{qty_note}Page {page + 1}/{len(SHOP_PAGES)} · Items sell back for {SELL_RATE:.0%} of what you paid"
     )
     return embed
 
 
 class BuySelect(Select):
-    def __init__(self, page_items: list[Item], inventory: dict):
+    def __init__(self, page_items: list[Item], inventory: dict, quantity: int = 1):
+        self.quantity = quantity
         options = []
         for item in visible_page_items(page_items, inventory):
             owned = inventory.get(item.name, 0)
             at_limit = item.ownership_limit > 0 and owned >= item.ownership_limit
+            q = item.buyable_qty(owned, quantity) or 1
+            qty_tag = f" ×{q}" if quantity > 1 else ""
+            price = item.bulk_cost(owned, q)
             options.append(
                 SelectOption(
-                    label=f"{item.fmt_name()} — {item.cost_for(owned):,} beans",
+                    label=f"{item.fmt_name()}{qty_tag} — {price:,} beans",
                     value=item.name,
                     emoji=item.emoji,
                     description="Owned limit reached" if at_limit else item.description[:100],
@@ -477,12 +561,15 @@ class BuySelect(Select):
 
     async def callback(self, interaction: Interaction):
         item = ITEM_MAP[self.values[0]]
-        doc, price, error = attempt_purchase(interaction.user.id, item)
+        doc, total, count, error = attempt_purchase_many(
+            interaction.user.id, item, self.quantity
+        )
         if error:
             embed = Embed(color=core.config.data["colors"]["error"], description=error)
             return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        action = f"✅ Bought {item.emoji} **{item.fmt_name()}** for `{price:,}` beans."
+        suffix = f" ×{count}" if count > 1 else ""
+        action = f"✅ Bought {item.emoji} **{item.fmt_name()}**{suffix} for `{total:,}` beans."
         await self.view.refresh(interaction, doc, action)
 
 
@@ -544,48 +631,39 @@ def _pick_tier(tiers: list[dict], luck: float) -> dict:
     return tiers[-1]
 
 
-def _roll_box(user_id: int, box_name: str) -> tuple[str, int] | tuple[None, None]:
-    """Atomically consume one box of `box_name` and roll a reward from its loot
-    table. Returns (result_description, boxes_remaining) or (None, None) if the
-    user owns no such box.
-    """
-    beans_emoji = core.config.data["emojis"]["beans"]
-    golden_emoji = core.config.data["emojis"]["golden_beans"]
-    tiers = LOOT_TABLES.get(box_name)
-    if not tiers:
-        return None, None
-
-    doc = database.users.find_one_and_update(
+def _consume_box(user_id: int, box_name: str) -> dict | None:
+    """Atomically take one box from the user, returning the updated doc."""
+    return database.users.find_one_and_update(
         {"_id": str(user_id), f"inventory.{box_name}": {"$gte": 1}},
         {"$inc": {f"inventory.{box_name}": -1}},
         return_document=ReturnDocument.AFTER,
     )
-    if doc is None:
-        return None, None
 
+
+def _resolve_tier(user_id: int, doc: dict, box_name: str) -> dict:
+    """Roll one reward for an already-consumed box and bank it. Returns a
+    structured reward so callers can format single or bulk results."""
     inventory = doc.get("inventory", {})
     multiplier = get_bean_multiplier(doc)
-    tier = _pick_tier(tiers, get_box_luck(doc))
+    tier = _pick_tier(LOOT_TABLES[box_name], get_box_luck(doc))
     label = tier.get("label", "")
-    generator_changed = False
 
-    def _give_beans(amount: int, multiplied: bool) -> str:
+    def _give_beans(amount: int, multiplied: bool) -> dict:
         if multiplied:
             amount = round(amount * multiplier)
         database.users.update_one(
             {"_id": str(user_id)},
             {"$inc": {"beans": amount, "totalBeansEarned": amount}},
         )
-        note = f" `×{multiplier:.2f}`" if multiplied and multiplier > 1.01 else ""
-        prefix = f"{label} " if label else ""
-        return f"{prefix}{beans_emoji} `+{amount:,}` beans!{note}"
+        return {"type": "beans", "amount": amount, "label": label,
+                "multiplied": multiplied, "multiplier": multiplier}
 
     if tier["type"] == "golden":
         amount = random.randint(tier["min"], tier["max"])
         database.users.update_one({"_id": str(user_id)}, {"$inc": {"goldenBeans": amount}})
-        prefix = f"{label} " if label else ""
-        result = f"{prefix}{golden_emoji} `+{amount}` golden beans!"
-    elif tier["type"] == "item":
+        return {"type": "golden", "amount": amount, "label": label}
+
+    if tier["type"] == "item":
         pools = tier.get("pool", [])
         eligible = [
             i for i in SHOP_INVENTORY
@@ -599,22 +677,49 @@ def _roll_box(user_id: int, box_name: str) -> tuple[str, int] | tuple[None, None
             if prize.beans_per_hour > 0 and doc.get("lastCollect") is None:
                 update["$set"] = {"lastCollect": datetime.now(timezone.utc)}
             database.users.update_one({"_id": str(user_id)}, update)
-            generator_changed = prize.category in ("generators", "generator_upgrades")
-            result = f"You found {prize.emoji} **{prize.fmt_name()}**!"
-        else:
-            result = _give_beans(
-                random.randint(tier.get("fallback_min", 20000), tier.get("fallback_max", 50000)),
-                multiplied=False,
-            )
-    else:  # "beans"
-        result = _give_beans(
-            random.randint(tier["min"], tier["max"]),
-            multiplied=tier.get("multiplied", False),
+            return {"type": "item", "item": prize,
+                    "generator": prize.category in ("generators", "generator_upgrades")}
+        return _give_beans(
+            random.randint(tier.get("fallback_min", 20000), tier.get("fallback_max", 50000)),
+            multiplied=False,
         )
 
-    # Refresh once for rate sync, achievements, and the remaining count
+    return _give_beans(random.randint(tier["min"], tier["max"]), tier.get("multiplied", False))
+
+
+def _format_reward(reward: dict) -> str:
+    """One-line description of a single reward."""
+    beans_emoji = core.config.data["emojis"]["beans"]
+    golden_emoji = core.config.data["emojis"]["golden_beans"]
+    label = reward.get("label", "")
+    prefix = f"{label} " if label else ""
+    if reward["type"] == "golden":
+        return f"{prefix}{golden_emoji} `+{reward['amount']}` golden beans!"
+    if reward["type"] == "item":
+        it = reward["item"]
+        return f"You found {it.emoji} **{it.fmt_name()}**!"
+    note = (
+        f" `×{reward['multiplier']:.2f}`"
+        if reward.get("multiplied") and reward.get("multiplier", 1) > 1.01
+        else ""
+    )
+    return f"{prefix}{beans_emoji} `+{reward['amount']:,}` beans!{note}"
+
+
+def _roll_box(user_id: int, box_name: str) -> tuple[str, int] | tuple[None, None]:
+    """Open a single box. Returns (result_description, boxes_remaining) or
+    (None, None) if the user owns no such box."""
+    if box_name not in LOOT_TABLES:
+        return None, None
+    doc = _consume_box(user_id, box_name)
+    if doc is None:
+        return None, None
+
+    reward = _resolve_tier(user_id, doc, box_name)
+    result = _format_reward(reward)
+
     fresh = database.users.find_one({"_id": str(user_id)}) or doc
-    if generator_changed:
+    if reward.get("generator"):
         sync_generator_rate(user_id, fresh.get("inventory", {}))
     result += format_unlocks(check_achievements(user_id, fresh))
 
@@ -622,11 +727,62 @@ def _roll_box(user_id: int, box_name: str) -> tuple[str, int] | tuple[None, None
     return result, remaining
 
 
+def _open_many(user_id: int, box_name: str, count: int) -> tuple[str, int] | tuple[None, None]:
+    """Open up to `count` boxes at once, returning an aggregated summary."""
+    if box_name not in LOOT_TABLES:
+        return None, None
+
+    opened = beans_total = golden_total = 0
+    items: dict[str, int] = {}
+    generator_changed = False
+    for _ in range(count):
+        doc = _consume_box(user_id, box_name)
+        if doc is None:
+            break
+        reward = _resolve_tier(user_id, doc, box_name)
+        opened += 1
+        if reward["type"] == "beans":
+            beans_total += reward["amount"]
+        elif reward["type"] == "golden":
+            golden_total += reward["amount"]
+        else:
+            items[reward["item"].name] = items.get(reward["item"].name, 0) + 1
+            generator_changed = generator_changed or reward.get("generator", False)
+
+    if opened == 0:
+        return None, None
+
+    fresh = database.users.find_one({"_id": str(user_id)}) or {}
+    if generator_changed:
+        sync_generator_rate(user_id, fresh.get("inventory", {}))
+
+    beans_emoji = core.config.data["emojis"]["beans"]
+    golden_emoji = core.config.data["emojis"]["golden_beans"]
+    lines = [f"Opened **{opened}**× {ITEM_MAP[box_name].fmt_name()}:"]
+    if beans_total:
+        lines.append(f"{beans_emoji} `+{beans_total:,}` beans")
+    if golden_total:
+        lines.append(f"{golden_emoji} `+{golden_total}` golden beans")
+    if items:
+        item_str = ", ".join(
+            f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()} ×{c}" for n, c in items.items()
+        )
+        lines.append(f"🎁 {item_str}")
+    summary = "\n".join(lines) + format_unlocks(check_achievements(user_id, fresh))
+
+    remaining = fresh.get("inventory", {}).get(box_name, 0)
+    return summary, remaining
+
+
+MAX_BULK_OPEN = 10  # ceiling for a single "Open All" / bulk /open
+
+
 class OpenBoxView(View):
-    def __init__(self, user_id: int, box_name: str, remaining: int):
+    def __init__(self, user_id: int, box_name: str, remaining: int, has_opener: bool = False):
         super().__init__(timeout=120)
         self.user_id = user_id
         self.box_name = box_name
+        self.has_opener = has_opener
         box = ITEM_MAP[box_name]
         self._btn = Button(
             label="Open Another",
@@ -637,34 +793,61 @@ class OpenBoxView(View):
         self._btn.callback = self._open_another
         self.add_item(self._btn)
 
+        self._all_btn = None
+        if has_opener:
+            self._all_btn = Button(
+                label="Open All",
+                style=ButtonStyle.secondary,
+                emoji="🔓",
+                disabled=(remaining == 0),
+            )
+            self._all_btn.callback = self._open_all
+            self.add_item(self._all_btn)
+
     async def interaction_check(self, interaction: Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("These aren't your boxes!", ephemeral=True)
             return False
         return True
 
-    async def _open_another(self, interaction: Interaction):
-        box = ITEM_MAP[self.box_name]
-        result, remaining = _roll_box(interaction.user.id, self.box_name)
-        if result is None:
-            self._btn.disabled = True
-            await interaction.response.edit_message(view=self)
-            await interaction.followup.send(
-                embed=Embed(
-                    color=core.config.data["colors"]["error"],
-                    description=f"You don't have any {box.emoji} **{box.fmt_name()}** left!",
-                ),
-                ephemeral=True,
-            )
-            return
+    def _set_disabled(self, remaining: int) -> None:
+        self._btn.disabled = remaining == 0
+        if self._all_btn is not None:
+            self._all_btn.disabled = remaining == 0
 
-        self._btn.disabled = (remaining == 0)
+    async def _empty_followup(self, interaction: Interaction) -> None:
+        box = ITEM_MAP[self.box_name]
+        self._set_disabled(0)
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(
+            embed=Embed(
+                color=core.config.data["colors"]["error"],
+                description=f"You don't have any {box.emoji} **{box.fmt_name()}** left!",
+            ),
+            ephemeral=True,
+        )
+
+    async def _show(self, interaction: Interaction, result: str, remaining: int) -> None:
+        box = ITEM_MAP[self.box_name]
+        self._set_disabled(remaining)
         embed = Embed(
             color=core.config.data["colors"]["secondary"],
             title=f"{box.emoji} {box.fmt_name()} opened!",
             description=f"{result}\n-# {box.fmt_name()}s left: {remaining}",
         )
         await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _open_another(self, interaction: Interaction):
+        result, remaining = _roll_box(interaction.user.id, self.box_name)
+        if result is None:
+            return await self._empty_followup(interaction)
+        await self._show(interaction, result, remaining)
+
+    async def _open_all(self, interaction: Interaction):
+        result, remaining = _open_many(interaction.user.id, self.box_name, MAX_BULK_OPEN)
+        if result is None:
+            return await self._empty_followup(interaction)
+        await self._show(interaction, result, remaining)
 
 
 class PageButton(Button):
@@ -677,17 +860,35 @@ class PageButton(Button):
         await self.view.refresh(interaction, user_doc, None, page_delta=self.delta)
 
 
+BUY_QUANTITIES = [1, 5, 10]
+
+
+class QuantityButton(Button):
+    def __init__(self, quantity: int):
+        super().__init__(label=f"Qty: {quantity}×", style=ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: Interaction):
+        i = BUY_QUANTITIES.index(self.view.quantity)
+        self.view.quantity = BUY_QUANTITIES[(i + 1) % len(BUY_QUANTITIES)]
+        user_doc = find_user_or_default(interaction.user.id)
+        await self.view.refresh(
+            interaction, user_doc, f"🛒 Buy quantity set to **{self.view.quantity}×**."
+        )
+
+
 class ShopView(View):
-    def __init__(self, user_id: int, user_doc: dict, page: int = 0):
+    def __init__(self, user_id: int, user_doc: dict, page: int = 0, quantity: int = 1):
         super().__init__(timeout=180)
         self.user_id = user_id
         self.page = page
+        self.quantity = quantity
         self.message = None
         inventory = user_doc.get("inventory", {})
-        self.add_item(BuySelect(SHOP_PAGES[page][1], inventory))
+        self.add_item(BuySelect(SHOP_PAGES[page][1], inventory, quantity))
         self.add_item(SellSelect(inventory))
         self.add_item(PageButton("◀ Previous", -1, disabled=page <= 0))
         self.add_item(PageButton("Next ▶", 1, disabled=page >= len(SHOP_PAGES) - 1))
+        self.add_item(QuantityButton(quantity))
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -708,11 +909,11 @@ class ShopView(View):
     ):
         """Rebuilds the embed and components after a transaction or page turn."""
         new_page = max(0, min(self.page + page_delta, len(SHOP_PAGES) - 1))
-        new_view = ShopView(self.user_id, user_doc, new_page)
+        new_view = ShopView(self.user_id, user_doc, new_page, self.quantity)
         new_view.message = self.message
         self.stop()
         await interaction.response.edit_message(
-            embed=build_shop_embed(user_doc, new_page, action), view=new_view
+            embed=build_shop_embed(user_doc, new_page, action, self.quantity), view=new_view
         )
 
     async def on_timeout(self):
@@ -800,18 +1001,32 @@ class Shop(Cog):
         await ctx.response.send_message(embed=embed)
 
     @app_commands.command(name="open", description="Open a mystery box or crate")
-    @app_commands.describe(box="Which box to open")
+    @app_commands.describe(box="Which box to open", amount="How many to open (needs a Box Opener)")
     @app_commands.choices(
         box=[
             app_commands.Choice(name=f"{ITEM_MAP[n].emoji} {ITEM_MAP[n].fmt_name()}", value=n)
             for n in BOX_NAMES
         ]
     )
-    async def open(self, ctx: Interaction, box: str = "mystery_box"):
+    async def open(self, ctx: Interaction, box: str = "mystery_box", amount: int = 1):
         if box not in LOOT_TABLES:
             box = "mystery_box"
         box_item = ITEM_MAP[box]
-        result, remaining = _roll_box(ctx.user.id, box)
+        user_doc = find_user_or_default(ctx.user.id)
+        has_opener = user_doc.get("inventory", {}).get("box_opener", 0) >= 1
+        amount = max(1, min(amount, MAX_BULK_OPEN))
+
+        if amount > 1 and not has_opener:
+            embed = Embed(
+                color=core.config.data["colors"]["error"],
+                description="You need a 🔓 **Box Opener** to open multiple at once. Grab one in `/shop`!",
+            )
+            return await ctx.response.send_message(embed=embed, ephemeral=True)
+
+        if amount > 1:
+            result, remaining = _open_many(ctx.user.id, box, amount)
+        else:
+            result, remaining = _roll_box(ctx.user.id, box)
         if result is None:
             embed = Embed(
                 color=core.config.data["colors"]["error"],
@@ -824,7 +1039,9 @@ class Shop(Cog):
             title=f"{box_item.emoji} {box_item.fmt_name()} opened!",
             description=f"{result}\n-# {box_item.fmt_name()}s left: {remaining}",
         )
-        await ctx.response.send_message(embed=embed, view=OpenBoxView(ctx.user.id, box, remaining))
+        await ctx.response.send_message(
+            embed=embed, view=OpenBoxView(ctx.user.id, box, remaining, has_opener)
+        )
 
     @app_commands.command(name="inventory", description="View your items")
     async def inventory(self, ctx: Interaction):
