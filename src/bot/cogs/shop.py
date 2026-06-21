@@ -57,10 +57,12 @@ class Item:
         SELL_RATE of the price that was paid for the most recent one."""
         return int(self.cost_for(max(owned - 1, 0)) * SELL_RATE)
 
-    def buyable_qty(self, owned: int, qty: int) -> int:
-        """How many of `qty` can actually be bought given the ownership limit."""
-        if self.ownership_limit > 0:
-            return max(0, min(qty, self.ownership_limit - owned))
+    def buyable_qty(self, owned: int, qty: int, limit: int | None = None) -> int:
+        """How many of `qty` can actually be bought given the ownership limit.
+        `limit` overrides the static limit (e.g. boxes raised by Bigger Stash)."""
+        limit = self.ownership_limit if limit is None else limit
+        if limit > 0:
+            return max(0, min(qty, limit - owned))
         return qty
 
     def bulk_cost(self, owned: int, qty: int) -> int:
@@ -70,7 +72,10 @@ class Item:
     def fmt_name(self) -> str:
         return self.name.replace("_", " ").title()
 
-    def fmt_shop_item(self, owned: int = 0, quantity: int = 1) -> str:
+    def fmt_shop_item(
+        self, owned: int = 0, quantity: int = 1, limit: int | None = None
+    ) -> str:
+        limit = self.ownership_limit if limit is None else limit
         notes = []
         if self.cooldown_reduction > 0:
             mins = self.cooldown_reduction // 60
@@ -87,14 +92,14 @@ class Item:
             notes.append(f"×{self.output_multiplier:g} output")
         if self.unlock_at > 0:
             notes.append(f"needs {self.unlock_at}× {self.target.replace('_', ' ')}")
-        if self.ownership_limit > 0:
-            notes.append(f"owned {owned}/{self.ownership_limit}")
+        if limit > 0:
+            notes.append(f"owned {owned}/{limit}")
         elif owned > 0:
             notes.append(f"owned {owned}")
         subtext = " · ".join(notes)
 
         # Price reflects the selected buy quantity (capped by the ownership limit)
-        buy_qty = self.buyable_qty(owned, quantity) if quantity > 1 else 1
+        buy_qty = self.buyable_qty(owned, quantity, limit) if quantity > 1 else 1
         if buy_qty > 1:
             price_str = f"`{self.bulk_cost(owned, buy_qty):,}` beans for ×{buy_qty}"
         else:
@@ -167,6 +172,9 @@ class PermanentUpgrade:
         self.max_level: int = data.get("max_level", 0)  # 0 = unlimited
         self.effect: str = data["effect"]
         self.effect_value: float = data.get("effect_value", 0.0)
+        # Extra effect added per level on top of the base value, so higher
+        # levels reward more than earlier ones (0 = flat, linear effect).
+        self.effect_growth: float = data.get("effect_growth", 0.0)
 
     def fmt_name(self) -> str:
         return self.name.replace("_", " ").title()
@@ -247,6 +255,29 @@ def get_golden_pet_chance(user_doc: dict) -> float:
 def get_box_luck(user_doc: dict) -> float:
     """Extra mystery-box fortune from Lucky Whiskers."""
     return _permanent_effect_total(user_doc, "lucky")
+
+
+def get_box_capacity_bonus(user_doc: dict) -> int:
+    """Extra mystery-box / golden-crate slots from the Bigger Stash upgrade.
+    Scales: level i grants `effect_value + (i-1)*effect_growth` slots, so the
+    later levels are worth more than the first."""
+    upgrades = user_doc.get("permanentUpgrades", {})
+    total = 0.0
+    for u in PERMANENT_UPGRADES:
+        if u.effect != "box_capacity":
+            continue
+        level = upgrades.get(u.name, 0)
+        # Sum of an arithmetic series over the owned levels.
+        total += level * u.effect_value + u.effect_growth * level * (level - 1) / 2
+    return int(total)
+
+
+def effective_limit(item: Item, user_doc: dict) -> int:
+    """An item's ownership limit, raised for boxes by Bigger Stash. Non-box items
+    and uncapped items are unaffected."""
+    if item.ownership_limit > 0 and item.name in BOX_NAMES:
+        return item.ownership_limit + get_box_capacity_bonus(user_doc)
+    return item.ownership_limit
 
 
 def get_head_start_fraction(user_doc: dict) -> float:
@@ -355,6 +386,7 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
     inventory = user_doc.get("inventory", {})
     owned = inventory.get(item.name, 0)
     price = item.cost_for(owned)
+    limit = effective_limit(item, user_doc)
 
     if not item.is_unlocked(inventory):
         return (
@@ -367,9 +399,9 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
         )
 
     query = {"_id": str(user_id), "beans": {"$gte": price}}
-    if item.ownership_limit > 0:
+    if limit > 0:
         # $not matches both missing fields and counts below the limit
-        query[f"inventory.{item.name}"] = {"$not": {"$gte": item.ownership_limit}}
+        query[f"inventory.{item.name}"] = {"$not": {"$gte": limit}}
     if item.price_growth > 1.0:
         # Price depends on the owned count, so require it to be unchanged
         query[f"inventory.{item.name}"] = owned if owned > 0 else {"$not": {"$gte": 1}}
@@ -389,13 +421,14 @@ def attempt_purchase(user_id: int, item: Item) -> tuple[dict | None, int, str | 
 
     user_doc = find_user_or_default(user_id)
     owned = user_doc.get("inventory", {}).get(item.name, 0)
-    if item.ownership_limit > 0 and owned >= item.ownership_limit:
+    limit = effective_limit(item, user_doc)
+    if limit > 0 and owned >= limit:
         return (
             None,
             price,
             (
                 f"You already own the maximum of **{item.fmt_name()}** "
-                f"({item.ownership_limit})."
+                f"({limit})."
             ),
         )
     beans_emoji = core.config.data["emojis"]["beans"]
@@ -424,6 +457,7 @@ def attempt_purchase_many(
     inventory = user_doc.get("inventory", {})
     owned = inventory.get(item.name, 0)
     beans = user_doc.get("beans", 0)
+    limit = effective_limit(item, user_doc)
 
     if not item.is_unlocked(inventory):
         return (
@@ -435,18 +469,18 @@ def attempt_purchase_many(
                 f"{item.unlock_at}× {item.target.replace('_', ' ').title()} first."
             ),
         )
-    if item.ownership_limit > 0 and owned >= item.ownership_limit:
+    if limit > 0 and owned >= limit:
         return (
             None,
             0,
             0,
             (
-                f"You already own the maximum of **{item.fmt_name()}** ({item.ownership_limit})."
+                f"You already own the maximum of **{item.fmt_name()}** ({limit})."
             ),
         )
 
     # How many can we actually buy: limited by ownership cap, then affordability
-    want = item.buyable_qty(owned, qty)
+    want = item.buyable_qty(owned, qty, limit)
     count, total = 0, 0
     while count < want:
         next_price = item.cost_for(owned + count)
@@ -468,7 +502,7 @@ def attempt_purchase_many(
         )
 
     query = {"_id": str(user_id), "beans": {"$gte": total}}
-    if item.price_growth > 1.0 or item.ownership_limit > 0:
+    if item.price_growth > 1.0 or limit > 0:
         # Price/limit depend on the owned count, so require it unchanged
         query[f"inventory.{item.name}"] = owned if owned > 0 else {"$not": {"$gte": 1}}
 
@@ -533,7 +567,11 @@ def build_shop_embed(
 
     if shown:
         items = "\n".join(
-            item.fmt_shop_item(owned=inventory.get(item.name, 0), quantity=quantity)
+            item.fmt_shop_item(
+                owned=inventory.get(item.name, 0),
+                quantity=quantity,
+                limit=effective_limit(item, user_doc),
+            )
             for item in shown
         )
     elif page_items and page_items[0].category == "generator_upgrades":
@@ -557,13 +595,15 @@ def build_shop_embed(
 
 
 class BuySelect(Select):
-    def __init__(self, page_items: list[Item], inventory: dict, quantity: int = 1):
+    def __init__(self, page_items: list[Item], user_doc: dict, quantity: int = 1):
         self.quantity = quantity
+        inventory = user_doc.get("inventory", {})
         options = []
         for item in visible_page_items(page_items, inventory):
             owned = inventory.get(item.name, 0)
-            at_limit = item.ownership_limit > 0 and owned >= item.ownership_limit
-            q = item.buyable_qty(owned, quantity) or 1
+            limit = effective_limit(item, user_doc)
+            at_limit = limit > 0 and owned >= limit
+            q = item.buyable_qty(owned, quantity, limit) or 1
             qty_tag = f" ×{q}" if quantity > 1 else ""
             price = item.bulk_cost(owned, q)
             options.append(
@@ -914,7 +954,7 @@ class PageButton(Button):
         await self.view.refresh(interaction, user_doc, None, page_delta=self.delta)
 
 
-BUY_QUANTITIES = [1, 5, 10]
+BUY_QUANTITIES = [1, 5, 10, 100]
 
 
 class QuantityButton(Button):
@@ -938,7 +978,7 @@ class ShopView(View):
         self.quantity = quantity
         self.message = None
         inventory = user_doc.get("inventory", {})
-        self.add_item(BuySelect(SHOP_PAGES[page][1], inventory, quantity))
+        self.add_item(BuySelect(SHOP_PAGES[page][1], user_doc, quantity))
         self.add_item(SellSelect(inventory))
         self.add_item(PageButton("◀ Previous", -1, disabled=page <= 0))
         self.add_item(PageButton("Next ▶", 1, disabled=page >= len(SHOP_PAGES) - 1))
@@ -1012,11 +1052,8 @@ class Shop(Cog):
 
         beans_emoji = core.config.data["emojis"]["beans"]
         owned = doc.get("inventory", {}).get(shop_item.name, 0)
-        owned_str = (
-            f"**{owned}** / {shop_item.ownership_limit}"
-            if shop_item.ownership_limit > 0
-            else f"**{owned}**"
-        )
+        limit = effective_limit(shop_item, doc)
+        owned_str = f"**{owned}** / {limit}" if limit > 0 else f"**{owned}**"
         embed = Embed(
             color=core.config.data["colors"]["primary"],
             title=f"{shop_item.emoji} {shop_item.fmt_name()}",

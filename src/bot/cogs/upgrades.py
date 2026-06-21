@@ -29,6 +29,13 @@ def effect_summary(upgrade: PermanentUpgrade) -> str:
         return f"keep +{v:.0%} beans on prestige / level"
     if upgrade.effect == "lucky":
         return f"+{v:.0%} luck / level"
+    if upgrade.effect == "box_capacity":
+        if upgrade.effect_growth:
+            return (
+                f"+{int(v)} box capacity / level "
+                f"(+{upgrade.effect_growth:g} more each level)"
+            )
+        return f"+{int(v)} box capacity / level"
     return ""
 
 

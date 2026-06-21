@@ -356,7 +356,7 @@ category = "cosmetics"
 
 # ───── Permanent Upgrades ─────
 # Bought with golden beans via /upgrades. These survive prestige.
-# effect types: multiplier | collect_cap | cooldown_floor | auto_collect | head_start | lucky
+# effect types: multiplier | collect_cap | cooldown_floor | auto_collect | head_start | lucky | box_capacity
 # cost for a level = round(base_cost * cost_growth ** current_level)
 
 [[permanent_upgrades]]
@@ -418,6 +418,17 @@ cost_growth = 2.0
 max_level = 5
 effect = "lucky"
 effect_value = 0.02
+
+[[permanent_upgrades]]
+name = "bigger_stash"
+description = "Hold more mystery boxes and golden crates - later levels add even more."
+emoji = "🗄️"
+base_cost = 2
+cost_growth = 2.0
+max_level = 5
+effect = "box_capacity"
+effect_value = 2      # base extra box slots at level 1
+effect_growth = 1     # each level adds 1 more slot than the last (+2,+3,+4,+5,+6)
 
 # ───── Achievements ─────
 # Unlock once when the metric is reached. Pays golden beans + a tiny permanent
